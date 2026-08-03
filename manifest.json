@@ -1,0 +1,10 @@
+{
+  "id": "obsidian-sfl",
+  "name": "SFL Preview",
+  "version": "0.1.0",
+  "minAppVersion": "1.4.0",
+  "description": "Renders SFL (.sfl) diagram blocks as live SVG previews inside notes, using the stickyflow.js rendering engine.",
+  "author": "StickyFlow",
+  "authorUrl": "https://stickyflow.ai",
+  "isDesktopOnly": false
+}
