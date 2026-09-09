@@ -8,13 +8,20 @@ pan, wheel (or the `−` / `+` / `Fit` toolbar) to zoom, click a shape or link t
 select it. The block has a `resize: vertical` handle on its bottom edge.
 
 A toolbar **Code** button flips the block between the diagram and its SFL
-source. When the note is open in **editing mode** (Live Preview) that source is
-an **editable textarea** — `Save` (or `Ctrl`/`⌘`+`Enter`) validates it, writes
-the new text back into the fenced block through the note's editor (so it's one
-step on the normal undo stack), and re-renders in place. In **Reading mode**
-the source is shown read-only. Dragging shapes on the canvas still doesn't edit
-anything — gesture editing (move/resize/text via `stickyflow/interaction`) is a
-later milestone, see [Known gaps](#known-gaps).
+source.
+
+- **Editing mode (Live Preview):** the block splits into a live render of your
+  draft above an editable textarea. Type and the diagram updates as you go —
+  nothing is written to the note yet. `Save` (or `Ctrl`/`⌘`+`Enter`) commits
+  the draft into the fenced block through the note's editor (one step on the
+  undo stack); `Revert` drops it and the preview snaps back to what's in the
+  note. An unparseable draft holds the last good render and shows the error in
+  the footer; `Save` stays disabled until it parses.
+- **Reading mode:** the source is shown read-only.
+
+Dragging shapes on the canvas still doesn't edit anything — gesture editing
+(move/resize/text via `stickyflow/interaction`) is a later milestone, see
+[Known gaps](#known-gaps).
 
 > The `stickyflow/viewer` tier itself only pans on ctrl/⌘ + drag (a plain drag
 > is left for a host page to scroll); the plugin bridges plain-drag-to-pan on

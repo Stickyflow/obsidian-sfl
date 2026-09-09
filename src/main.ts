@@ -6,11 +6,14 @@
 // touch-scroll on a phone.
 //
 // A toolbar "Code" button flips a block between the diagram and its SFL source.
-// When the note is in editing mode (Live Preview) that source is an editable
-// textarea: Save writes the new text back into the fenced block through the
-// note's editor (on Obsidian's undo stack) and re-renders in place. In Reading
-// mode the source is shown read-only. Drag-gesture editing (move/resize/text
-// via `stickyflow/interaction`) is still a later milestone — see README.
+// When the note is in editing mode (Live Preview) that opens a split: the SFL
+// in an editable textarea below a *live* render of whatever you've typed
+// (nothing is written to the note yet). "Save" commits the draft into the
+// fenced block through the note's editor (one step on the undo stack);
+// "Revert" drops it and the preview snaps back to what's in the note. In
+// Reading mode the source is shown read-only. Drag-gesture editing
+// (move/resize/text via `stickyflow/interaction`) is still a later milestone —
+// see README.
 import {
   type App,
   type Editor,
@@ -28,13 +31,13 @@ import { createViewer, type Viewer } from 'stickyflow/viewer';
 // block's own text (typing elsewhere in the note, theme change, metadata
 // updates, pane resize, a reading/editing mode switch), each time handing us a
 // fresh `el` and a fresh render child. Without a cache, a new viewer is built
-// every time and the reader's pan/zoom — plus any in-progress edit in the Code
-// view — is thrown away. So the live viewer, its DOM subtree and the current
-// edit state are kept in a module-level map keyed by note path + block start
-// line; a re-render that resolves to the same key re-adopts the existing node
-// (calling `viewer.update()` if the source changed underneath) instead of
-// remounting. Refcounted, with a short deferred destroy, so the "tear down then
-// immediately rebuild the same block" churn neither leaks nor thrashes.
+// every time and the reader's pan/zoom — plus any in-progress edit and its
+// live preview — is thrown away. So the live viewer, its DOM subtree and the
+// current edit state are kept in a module-level map keyed by note path + block
+// start line; a re-render that resolves to the same key re-adopts the existing
+// node (reconciling what it shows) instead of remounting. Refcounted, with a
+// short deferred destroy, so the "tear down then immediately rebuild the same
+// block" churn neither leaks nor thrashes.
 interface CacheEntry {
   viewer: Viewer;
   rootEl: HTMLElement;
@@ -44,15 +47,23 @@ interface CacheEntry {
   unbindPan: () => void;
   /** Diagram vs. SFL-source view — the per-block "Code" toggle. */
   showCode: boolean;
-  /** The SFL text the viewer is currently showing (matches what's in the note). */
+  /** The SFL text in the note (what a Save writes, what Revert restores to). */
   source: string;
-  /** The Code view's working copy — diverges from `source` while editing, kept
-   *  here so it survives re-render churn. Reset to `source` on Save/Revert. */
+  /** The Code view's working copy. Diverges from `source` while editing; kept
+   *  here so an in-progress edit and its preview survive re-render churn. */
   draft: string;
+  /** Whether `draft` currently parses — gates Save and the live preview. */
+  draftValid: boolean;
+  /** The source string the viewer is currently rendering (`source`, or `draft`
+   *  while the editing split is open). Avoids redundant `viewer.update()`s. */
+  rendered: string;
+  /** Debounce handle for pushing `draft` into the viewer as you type. */
+  liveTimer: number | null;
 }
 
 const viewerCache = new Map<string, CacheEntry>();
 const DESTROY_GRACE_MS = 1500;
+const LIVE_PREVIEW_DEBOUNCE_MS = 300;
 
 function hash32(input: string): string {
   let h = 5381;
@@ -72,10 +83,27 @@ function destroyEntry(key: string, entry: CacheEntry): void {
   if (entry.destroyTimer !== null) {
     window.clearTimeout(entry.destroyTimer);
   }
+  if (entry.liveTimer !== null) {
+    window.clearTimeout(entry.liveTimer);
+  }
   entry.unbindPan();
   entry.viewer.destroy();
   entry.rootEl.remove();
   viewerCache.delete(key);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+// null when the SFL parses, otherwise the parse error's message.
+function renderError(source: string): string | null {
+  try {
+    render(source);
+    return null;
+  } catch (error) {
+    return errorMessage(error);
+  }
 }
 
 // --- viewer helpers -------------------------------------------------------------
@@ -233,12 +261,16 @@ function renderStatic(container: HTMLElement, source: string): void {
   }
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 const OPEN_FENCE = /^\s*(`{3,}|~{3,})\s*sfl\b/;
 const CLOSE_FENCE = /^\s*(`{3,}|~{3,})\s*$/;
+
+interface CodeView {
+  el: HTMLElement;
+  /** Show/hide and switch between the read-only overlay and the editing split. */
+  setMode(showCode: boolean, splitEditing: boolean): void;
+  /** Re-sync the textarea/`<pre>` from the current entry state. */
+  refresh(): void;
+}
 
 // --- render child ------------------------------------------------------------
 class SflBlock extends MarkdownRenderChild {
@@ -273,15 +305,14 @@ class SflBlock extends MarkdownRenderChild {
       }
       cached.mounts++;
       // The block's text changed underneath this viewer (edited by hand in the
-      // note, a sync, a git checkout) — follow it without a remount so pan/zoom
-      // survives. A clean Code-view draft follows too; a dirty one is left for
-      // the Save guard to reconcile.
+      // note, a sync, a git checkout). Follow it; a clean draft follows too, a
+      // dirty one is left for the Save guard to reconcile.
       if (this.source !== cached.source) {
         const draftWasClean = cached.draft === cached.source;
         cached.source = this.source;
-        cached.viewer.update({ source: this.source });
         if (draftWasClean) {
           cached.draft = this.source;
+          cached.draftValid = true;
         }
       }
       this.mountInteractive(container, cached);
@@ -315,6 +346,9 @@ class SflBlock extends MarkdownRenderChild {
       showCode: false,
       source: this.source,
       draft: this.source,
+      draftValid: true,
+      rendered: this.source,
+      liveTimer: null,
     };
     viewerCache.set(key, entry);
     this.mountInteractive(container, entry);
@@ -325,23 +359,42 @@ class SflBlock extends MarkdownRenderChild {
     container.append(entry.rootEl);
 
     const editor = this.editableEditorForNote();
-    const codeView = this.buildCodeView(container, entry, editor);
+    const editable = editor !== null;
 
-    const status = container.createDiv('sfl-status');
-    const paintStatus = (): void => {
-      const selection = entry.viewer.getSelection();
-      status.setText(selection.length ? `selected: ${selection.map((owner) => owner.id).join(', ')}` : '');
-      status.hidden = entry.showCode || selection.length === 0;
-    };
-
-    const applyView = (): void => {
-      entry.rootEl.hidden = entry.showCode;
-      codeView.el.hidden = !entry.showCode;
+    // reconcile() is the single place that decides what the viewer shows and
+    // which panes are visible, from the current entry state. Declared before
+    // buildCodeView so its handlers can call it, and called once at the end.
+    function reconcile(): void {
+      const splitEditing = entry.showCode && editable;
+      // While the editing split is open, preview the draft when it parses; when
+      // it doesn't, hold the last good render rather than snapping back to the
+      // saved source on every half-typed keystroke. Diagram view always shows
+      // exactly what's in the note.
+      const want = splitEditing ? (entry.draftValid ? entry.draft : entry.rendered) : entry.source;
+      if (want !== entry.rendered) {
+        try {
+          entry.viewer.update({ source: want });
+          entry.rendered = want;
+        } catch {
+          /* keep the last good render; parse errors surface in the code view */
+        }
+      }
+      entry.rootEl.hidden = entry.showCode && !editable;
+      codeView.setMode(entry.showCode, splitEditing);
       if (entry.showCode) {
         codeView.refresh();
       }
       paintStatus();
-    };
+    }
+
+    const codeView = this.buildCodeView(container, entry, editor, reconcile);
+
+    const status = container.createDiv('sfl-status');
+    function paintStatus(): void {
+      const selection = entry.viewer.getSelection();
+      status.setText(selection.length ? `selected: ${selection.map((owner) => owner.id).join(', ')}` : '');
+      status.hidden = entry.showCode || selection.length === 0;
+    }
 
     const { bar, sync } = buildToolbar({
       codeShown: entry.showCode,
@@ -351,35 +404,42 @@ class SflBlock extends MarkdownRenderChild {
       onToggleCode: () => {
         entry.showCode = !entry.showCode;
         sync(entry.showCode);
-        applyView();
+        reconcile();
       },
     });
     container.append(bar);
 
-    applyView();
+    reconcile();
     // Unsubscribe on this child's unload; a child that re-adopts a cached
     // viewer registers its own listener the same way.
     this.register(entry.viewer.on('selectionChange', paintStatus));
   }
 
-  // The Code view. Editable (textarea + Save/Revert) when the note is open in
-  // editing mode — there's an editor to write through; read-only (a <pre>)
-  // otherwise, matching the user's expectation that Reading mode doesn't edit.
+  // The Code view. Editable (textarea + live preview + Save/Revert) when the
+  // note is open in editing mode — there's an editor to write through;
+  // read-only (a <pre>) otherwise, matching the expectation that Reading mode
+  // doesn't edit. `reconcile` is called after every change so the shared
+  // viewer follows the draft.
   private buildCodeView(
     container: HTMLElement,
     entry: CacheEntry,
     editor: Editor | null,
-  ): { el: HTMLElement; refresh(): void } {
+    reconcile: () => void,
+  ): CodeView {
     const el = container.createDiv('sfl-code-view');
-    el.hidden = true;
-    const api = { el, refresh: (): void => {} };
 
     if (!editor) {
+      el.addClass('is-readonly');
       const pre = el.createEl('pre', { cls: 'sfl-source' });
       const code = pre.createEl('code');
       el.createDiv({ cls: 'sfl-code-hint', text: 'Switch the note to editing mode to change this.' });
-      api.refresh = () => code.setText(entry.source);
-      return api;
+      return {
+        el,
+        setMode: (showCode) => {
+          el.hidden = !showCode;
+        },
+        refresh: () => code.setText(entry.source),
+      };
     }
 
     const textarea = el.createEl('textarea', {
@@ -397,14 +457,50 @@ class SflBlock extends MarkdownRenderChild {
     };
     const paintButtons = (): void => {
       const dirty = entry.draft !== entry.source;
-      saveBtn.disabled = !dirty;
+      saveBtn.disabled = !dirty || !entry.draftValid;
       revertBtn.disabled = !dirty;
+    };
+
+    const runLivePreview = (): void => {
+      entry.liveTimer = null;
+      const error = renderError(entry.draft);
+      entry.draftValid = error === null;
+      setMessage(error ?? '', error !== null);
+      paintButtons();
+      reconcile();
+    };
+
+    const cancelLivePreview = (): void => {
+      if (entry.liveTimer !== null) {
+        window.clearTimeout(entry.liveTimer);
+        entry.liveTimer = null;
+      }
+    };
+
+    const save = (): void => {
+      cancelLivePreview();
+      const result = this.saveSource(container, entry, textarea.value);
+      if (!result.ok) {
+        setMessage(result.message, true);
+        return;
+      }
+      entry.source = result.source;
+      entry.draft = result.source;
+      entry.draftValid = true;
+      textarea.value = result.source;
+      paintButtons();
+      setMessage('Saved.');
+      reconcile();
     };
 
     textarea.value = entry.draft;
     textarea.addEventListener('input', () => {
       entry.draft = textarea.value;
-      setMessage('');
+      if (message.hasClass('is-error') === false) {
+        setMessage('');
+      }
+      cancelLivePreview();
+      entry.liveTimer = window.setTimeout(runLivePreview, LIVE_PREVIEW_DEBOUNCE_MS);
       paintButtons();
     });
     textarea.addEventListener('keydown', (event) => {
@@ -413,39 +509,38 @@ class SflBlock extends MarkdownRenderChild {
         save();
       }
     });
-
-    const save = (): void => {
-      const result = this.saveSource(container, entry, textarea.value);
-      if (!result.ok) {
-        setMessage(result.message, true);
-        return;
-      }
-      entry.source = result.source;
-      entry.draft = result.source;
-      textarea.value = result.source;
-      try {
-        entry.viewer.update({ source: result.source });
-      } catch {
-        /* validated with render() already; a contract error here is not fatal to the save */
-      }
-      paintButtons();
-      setMessage('Saved — toggle to Diagram to see the result.');
-    };
-
     saveBtn.addEventListener('click', save);
     revertBtn.addEventListener('click', () => {
+      cancelLivePreview();
       entry.draft = entry.source;
+      entry.draftValid = true;
       textarea.value = entry.source;
       setMessage('');
       paintButtons();
+      reconcile();
     });
 
-    api.refresh = () => {
-      textarea.value = entry.draft;
-      paintButtons();
-    };
+    // (Re)mount: re-validate the current draft so the split preview and the
+    // Save button are right even after re-render churn.
+    entry.draftValid = renderError(entry.draft) === null;
+    if (!entry.draftValid && entry.draft !== entry.source) {
+      setMessage(renderError(entry.draft) ?? '', true);
+    }
     paintButtons();
-    return api;
+
+    return {
+      el,
+      setMode: (showCode, splitEditing) => {
+        el.hidden = !showCode;
+        el.toggleClass('is-split', splitEditing);
+      },
+      refresh: () => {
+        if (textarea.value !== entry.draft) {
+          textarea.value = entry.draft;
+        }
+        paintButtons();
+      },
+    };
   }
 
   // Whole-body write-back: validate the new SFL, re-locate the fenced block,
@@ -461,10 +556,9 @@ class SflBlock extends MarkdownRenderChild {
     if (next === entry.source) {
       return { ok: true, source: entry.source };
     }
-    try {
-      render(next);
-    } catch (error) {
-      return { ok: false, message: `Won't save — ${errorMessage(error)}` };
+    const parseError = renderError(next);
+    if (parseError) {
+      return { ok: false, message: `Won't save — ${parseError}` };
     }
 
     const info = this.ctx.getSectionInfo(container);
@@ -489,11 +583,7 @@ class SflBlock extends MarkdownRenderChild {
       return { ok: false, message: 'The note changed underneath this block — reopen it and try again.' };
     }
 
-    editor.replaceRange(
-      `${next}\n`,
-      { line: info.lineStart + 1, ch: 0 },
-      { line: info.lineEnd, ch: 0 },
-    );
+    editor.replaceRange(`${next}\n`, { line: info.lineStart + 1, ch: 0 }, { line: info.lineEnd, ch: 0 });
     return { ok: true, source: next };
   }
 

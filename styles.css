@@ -15,13 +15,15 @@
   height: auto;
 }
 
-/* Interactive viewer: a fixed-height, user-resizable canvas. The viewer fills
-   its container, so an unbounded div would collapse to 0 or grow without
-   bound. The light "card" background is on the container, never the SVG — the
-   rendered diagram's text is tuned for a light canvas and would be unreadable
-   on a dark theme against a transparent background. */
+/* Interactive viewer: a fixed-height, user-resizable card laid out as a column
+   — the diagram fills it, and the editable Code view (when open) is a pane
+   docked under it. The light "card" background is on the container, never the
+   SVG: the rendered diagram's text is tuned for a light canvas and would be
+   unreadable on a dark theme against a transparent background. */
 .sfl-preview--interactive {
   position: relative;
+  display: flex;
+  flex-direction: column;
   height: 480px;
   min-height: 200px;
   overflow: hidden;
@@ -32,13 +34,18 @@
 }
 
 .sfl-preview--interactive .sfl-viewer-root {
+  flex: 1 1 0;
+  min-height: 0;
   width: 100%;
-  height: 100%;
   cursor: grab;
 }
 
 .sfl-preview--interactive .sfl-viewer-root:active {
   cursor: grabbing;
+}
+
+.sfl-preview--interactive .sfl-viewer-root[hidden] {
+  display: none;
 }
 
 .sfl-preview--interactive .sfl-viewer-root svg {
@@ -52,21 +59,30 @@
   cursor: pointer;
 }
 
-/* SFL source view, behind the "Code" toggle. Fills the box; a <textarea> when
-   the note is in editing mode (with a Save/Revert footer), a read-only <pre>
-   otherwise. */
+/* SFL source view, behind the "Code" toggle. In editing mode it's the bottom
+   pane of a split (textarea + Save/Revert footer) under a live render of the
+   draft; in Reading mode it's a read-only <pre> filling the whole card. */
 .sfl-preview--interactive .sfl-code-view {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   background: var(--background-primary);
 }
 
 /* This rule's `display: flex` outranks the UA `[hidden]` rule, so re-assert it. */
 .sfl-preview--interactive .sfl-code-view[hidden] {
   display: none;
+}
+
+.sfl-preview--interactive .sfl-code-view.is-readonly {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.sfl-preview--interactive .sfl-code-view.is-split {
+  flex: 0 0 42%;
+  border-top: 1px solid var(--background-modifier-border);
 }
 
 .sfl-preview--interactive .sfl-source {
