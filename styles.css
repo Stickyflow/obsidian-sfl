@@ -1,17 +1,144 @@
+/* Base container. The static fallback (mobile, export/print) keeps the
+   original auto-height / scroll behaviour. */
 .sfl-preview {
-  overflow: auto;
-  max-width: 100%;
   margin: 0.5em 0;
+  max-width: 100%;
 }
 
-.sfl-preview svg {
+.sfl-preview--static {
+  overflow: auto;
+}
+
+.sfl-preview--static svg {
   display: block;
   max-width: 100%;
   height: auto;
+}
+
+/* Interactive viewer: a fixed-height, user-resizable canvas. The viewer fills
+   its container, so an unbounded div would collapse to 0 or grow without
+   bound. The light "card" background is on the container, never the SVG — the
+   rendered diagram's text is tuned for a light canvas and would be unreadable
+   on a dark theme against a transparent background. */
+.sfl-preview--interactive {
+  position: relative;
+  height: 480px;
+  min-height: 200px;
+  overflow: hidden;
+  resize: vertical;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.sfl-preview--interactive .sfl-viewer-root {
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+.sfl-preview--interactive .sfl-viewer-root:active {
+  cursor: grabbing;
+}
+
+.sfl-preview--interactive .sfl-viewer-root svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.sfl-preview--interactive [data-sf-role='entity'],
+.sfl-preview--interactive [data-sf-role='link'] {
+  cursor: pointer;
+}
+
+/* Raw SFL view, behind the "Code" toggle. Fills the box, scrolls internally,
+   and stays text-selectable so the source can be copied out. */
+.sfl-preview--interactive .sfl-source {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  padding: 12px 14px;
+  overflow: auto;
+  font-family: var(--font-monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  tab-size: 2;
+  white-space: pre;
+  color: var(--text-normal);
+  background: var(--background-primary);
+  user-select: text;
+}
+
+.sfl-preview--interactive .sfl-source code {
+  font-family: inherit;
+  white-space: inherit;
+}
+
+.sfl-toolbar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: flex;
+  gap: 4px;
+}
+
+.sfl-toolbar button {
+  padding: 3px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-normal);
+  background: var(--interactive-normal);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.sfl-toolbar button:hover {
+  background: var(--interactive-hover);
+}
+
+.sfl-toolbar button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.sfl-toolbar button[aria-pressed='true'] {
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+  border-color: var(--interactive-accent);
+}
+
+.sfl-toolbar .sfl-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 1px;
+  background: var(--background-modifier-border);
+}
+
+.sfl-status {
+  position: absolute;
+  left: 8px;
+  bottom: 6px;
+  z-index: 2;
+  max-width: calc(100% - 16px);
+  padding: 1px 6px;
+  overflow: hidden;
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+  background: var(--background-primary);
+  border-radius: 4px;
+  opacity: 0.85;
+  pointer-events: none;
 }
 
 .sfl-preview-error {
   color: var(--text-error);
   white-space: pre-wrap;
   font-size: 0.85em;
+  padding: 8px;
 }
