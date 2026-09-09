@@ -47,6 +47,9 @@ interface CacheEntry {
   unbindPan: () => void;
   /** Diagram vs. SFL-source view — the per-block "Code" toggle. */
   showCode: boolean;
+  /** In the editing split, whether the live-preview pane is collapsed so the
+   *  textarea gets the whole box. */
+  previewHidden: boolean;
   /** The SFL text in the note (what a Save writes, what Revert restores to). */
   source: string;
   /** The Code view's working copy. Diverges from `source` while editing; kept
@@ -266,8 +269,9 @@ const CLOSE_FENCE = /^\s*(`{3,}|~{3,})\s*$/;
 
 interface CodeView {
   el: HTMLElement;
-  /** Show/hide and switch between the read-only overlay and the editing split. */
-  setMode(showCode: boolean, splitEditing: boolean): void;
+  /** Show/hide and switch between the read-only overlay, the editing split, and
+   *  the editing split with the preview pane collapsed. */
+  setMode(showCode: boolean, splitEditing: boolean, previewHidden: boolean): void;
   /** Re-sync the textarea/`<pre>` from the current entry state. */
   refresh(): void;
 }
@@ -344,6 +348,7 @@ class SflBlock extends MarkdownRenderChild {
       destroyTimer: null,
       unbindPan: bindDragPan(viewer),
       showCode: false,
+      previewHidden: false,
       source: this.source,
       draft: this.source,
       draftValid: true,
@@ -366,11 +371,19 @@ class SflBlock extends MarkdownRenderChild {
     // buildCodeView so its handlers can call it, and called once at the end.
     function reconcile(): void {
       const splitEditing = entry.showCode && editable;
-      // While the editing split is open, preview the draft when it parses; when
-      // it doesn't, hold the last good render rather than snapping back to the
-      // saved source on every half-typed keystroke. Diagram view always shows
+      const previewOn = splitEditing && !entry.previewHidden;
+      // While the live preview is on, show the draft when it parses; when it
+      // doesn't, hold the last good render rather than snapping back to the
+      // saved source on every half-typed keystroke. With the preview collapsed
+      // (or in Diagram view) the viewer isn't visible, so leave it be — it's
+      // refreshed the moment it's shown again. Diagram view always shows
       // exactly what's in the note.
-      const want = splitEditing ? (entry.draftValid ? entry.draft : entry.rendered) : entry.source;
+      let want = entry.source;
+      if (previewOn) {
+        want = entry.draftValid ? entry.draft : entry.rendered;
+      } else if (splitEditing) {
+        want = entry.rendered;
+      }
       if (want !== entry.rendered) {
         try {
           entry.viewer.update({ source: want });
@@ -379,8 +392,8 @@ class SflBlock extends MarkdownRenderChild {
           /* keep the last good render; parse errors surface in the code view */
         }
       }
-      entry.rootEl.hidden = entry.showCode && !editable;
-      codeView.setMode(entry.showCode, splitEditing);
+      entry.rootEl.hidden = (entry.showCode && !editable) || (splitEditing && entry.previewHidden);
+      codeView.setMode(entry.showCode, splitEditing, entry.previewHidden);
       if (entry.showCode) {
         codeView.refresh();
       }
@@ -442,6 +455,11 @@ class SflBlock extends MarkdownRenderChild {
       };
     }
 
+    const setPreviewLabel = (btn: HTMLButtonElement): void => {
+      btn.setText(entry.previewHidden ? 'Show preview' : 'Hide preview');
+      btn.setAttr('aria-pressed', String(!entry.previewHidden));
+    };
+
     const textarea = el.createEl('textarea', {
       cls: 'sfl-source',
       attr: { spellcheck: 'false', 'aria-label': 'SFL source for this block' },
@@ -450,6 +468,14 @@ class SflBlock extends MarkdownRenderChild {
     const saveBtn = footer.createEl('button', { text: 'Save', cls: 'sfl-code-save' });
     const revertBtn = footer.createEl('button', { text: 'Revert' });
     const message = footer.createSpan('sfl-code-message');
+    const previewBtn = footer.createEl('button', { cls: 'sfl-preview-toggle' });
+    setPreviewLabel(previewBtn);
+    previewBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      entry.previewHidden = !entry.previewHidden;
+      setPreviewLabel(previewBtn);
+      reconcile();
+    });
 
     const setMessage = (text: string, isError = false): void => {
       message.setText(text);
@@ -530,14 +556,16 @@ class SflBlock extends MarkdownRenderChild {
 
     return {
       el,
-      setMode: (showCode, splitEditing) => {
+      setMode: (showCode, splitEditing, previewHidden) => {
         el.hidden = !showCode;
         el.toggleClass('is-split', splitEditing);
+        el.toggleClass('is-full', splitEditing && previewHidden);
       },
       refresh: () => {
         if (textarea.value !== entry.draft) {
           textarea.value = entry.draft;
         }
+        setPreviewLabel(previewBtn);
         paintButtons();
       },
     };

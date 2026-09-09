@@ -16,7 +16,8 @@ source.
   the draft into the fenced block through the note's editor (one step on the
   undo stack); `Revert` drops it and the preview snaps back to what's in the
   note. An unparseable draft holds the last good render and shows the error in
-  the footer; `Save` stays disabled until it parses.
+  the footer; `Save` stays disabled until it parses. `Hide preview` collapses
+  the render pane so the textarea gets the whole box.
 - **Reading mode:** the source is shown read-only.
 
 Dragging shapes on the canvas still doesn't edit anything — gesture editing

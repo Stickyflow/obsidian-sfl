@@ -85,6 +85,11 @@
   border-top: 1px solid var(--background-modifier-border);
 }
 
+/* Preview pane collapsed — the textarea takes the whole card. */
+.sfl-preview--interactive .sfl-code-view.is-split.is-full {
+  flex: 1 1 auto;
+}
+
 .sfl-preview--interactive .sfl-source {
   flex: 1 1 auto;
   min-height: 0;
@@ -124,12 +129,25 @@ textarea.sfl-source {
   padding: 6px 14px 10px;
 }
 
+.sfl-preview--interactive .sfl-code-message {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .sfl-preview--interactive .sfl-code-footer {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
   border-top: 1px solid var(--background-modifier-border);
+}
+
+.sfl-preview--interactive .sfl-code-footer .sfl-preview-toggle {
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .sfl-preview--interactive .sfl-code-footer button {
