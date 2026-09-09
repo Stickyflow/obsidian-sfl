@@ -17,11 +17,13 @@
 import {
   type App,
   type Editor,
+  type IconName,
   MarkdownRenderChild,
   type MarkdownPostProcessorContext,
   MarkdownView,
   Platform,
   Plugin,
+  setIcon,
 } from 'obsidian';
 import { render } from 'stickyflow';
 import { createViewer, type Viewer } from 'stickyflow/viewer';
@@ -200,6 +202,18 @@ function bindDragPan(viewer: Viewer): () => void {
   };
 }
 
+// A Lucide icon + optional text label inside a <button>. Re-callable to swap
+// the icon/label when a toggle button changes state.
+function paintButton(button: HTMLElement, icon: IconName, label: string, title = label): void {
+  button.empty();
+  setIcon(button.createSpan('sfl-btn-icon'), icon);
+  if (label) {
+    button.createSpan({ cls: 'sfl-btn-label', text: label });
+  }
+  button.setAttr('aria-label', title);
+  button.setAttr('title', title);
+}
+
 interface ToolbarHandlers {
   codeShown: boolean;
   onZoomOut(): void;
@@ -208,13 +222,14 @@ interface ToolbarHandlers {
   onToggleCode(): void;
 }
 
-// Toolbar: −  +  Fit  |  Code/Diagram. `sync()` re-paints the state-dependent
-// bits (Code button label + pressed state, zoom buttons disabled while the SFL
-// source is showing).
+// Toolbar: zoom-out  zoom-in  Fit  |  Code/Diagram. `sync()` re-paints the
+// state-dependent bits (Code button icon/label + pressed state, zoom buttons
+// disabled while the SFL source is showing).
 function buildToolbar(handlers: ToolbarHandlers): { bar: HTMLElement; sync(codeShown: boolean): void } {
   const bar = createDiv('sfl-toolbar');
-  const makeButton = (label: string, title: string, onClick: () => void): HTMLButtonElement => {
-    const button = bar.createEl('button', { text: label, attr: { 'aria-label': title, title } });
+  const makeButton = (icon: IconName, label: string, title: string, onClick: () => void): HTMLButtonElement => {
+    const button = bar.createEl('button');
+    paintButton(button, icon, label, title);
     button.addEventListener('click', (event) => {
       event.preventDefault();
       onClick();
@@ -222,15 +237,19 @@ function buildToolbar(handlers: ToolbarHandlers): { bar: HTMLElement; sync(codeS
     return button;
   };
 
-  const zoomOut = makeButton('−', 'Zoom out', handlers.onZoomOut);
-  const zoomIn = makeButton('+', 'Zoom in', handlers.onZoomIn);
-  const fit = makeButton('Fit', 'Fit diagram to view', handlers.onFit);
+  const zoomOut = makeButton('zoom-out', '', 'Zoom out', handlers.onZoomOut);
+  const zoomIn = makeButton('zoom-in', '', 'Zoom in', handlers.onZoomIn);
+  const fit = makeButton('maximize', 'Fit', 'Fit diagram to view', handlers.onFit);
   bar.createSpan('sfl-sep');
-  const code = makeButton('Code', 'Show the SFL source for this block', handlers.onToggleCode);
+  const code = makeButton('code', 'Code', 'Show the SFL source for this block', handlers.onToggleCode);
 
   const sync = (codeShown: boolean): void => {
-    code.setText(codeShown ? 'Diagram' : 'Code');
-    code.setAttr('aria-label', codeShown ? 'Show the rendered diagram' : 'Show the SFL source for this block');
+    paintButton(
+      code,
+      codeShown ? 'image' : 'code',
+      codeShown ? 'Diagram' : 'Code',
+      codeShown ? 'Show the rendered diagram' : 'Show the SFL source for this block',
+    );
     code.setAttr('aria-pressed', String(codeShown));
     for (const button of [zoomOut, zoomIn, fit]) {
       button.disabled = codeShown;
@@ -348,7 +367,9 @@ class SflBlock extends MarkdownRenderChild {
       destroyTimer: null,
       unbindPan: bindDragPan(viewer),
       showCode: false,
-      previewHidden: false,
+      // Default the editing split to textarea-only — you open Code to write
+      // SFL; reveal the render with "Show preview" when you want to check it.
+      previewHidden: true,
       source: this.source,
       draft: this.source,
       draftValid: true,
@@ -456,7 +477,11 @@ class SflBlock extends MarkdownRenderChild {
     }
 
     const setPreviewLabel = (btn: HTMLButtonElement): void => {
-      btn.setText(entry.previewHidden ? 'Show preview' : 'Hide preview');
+      paintButton(
+        btn,
+        entry.previewHidden ? 'eye' : 'eye-off',
+        entry.previewHidden ? 'Show preview' : 'Hide preview',
+      );
       btn.setAttr('aria-pressed', String(!entry.previewHidden));
     };
 
@@ -465,8 +490,10 @@ class SflBlock extends MarkdownRenderChild {
       attr: { spellcheck: 'false', 'aria-label': 'SFL source for this block' },
     });
     const footer = el.createDiv('sfl-code-footer');
-    const saveBtn = footer.createEl('button', { text: 'Save', cls: 'sfl-code-save' });
-    const revertBtn = footer.createEl('button', { text: 'Revert' });
+    const saveBtn = footer.createEl('button', { cls: 'sfl-code-save' });
+    paintButton(saveBtn, 'save', 'Save');
+    const revertBtn = footer.createEl('button');
+    paintButton(revertBtn, 'rotate-ccw', 'Revert');
     const message = footer.createSpan('sfl-code-message');
     const previewBtn = footer.createEl('button', { cls: 'sfl-preview-toggle' });
     setPreviewLabel(previewBtn);

@@ -151,6 +151,9 @@ textarea.sfl-source {
 }
 
 .sfl-preview--interactive .sfl-code-footer button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 3px 10px;
   font-size: 12px;
   border-radius: 4px;
@@ -189,6 +192,9 @@ textarea.sfl-source {
 }
 
 .sfl-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 3px 8px;
   font-size: 12px;
   line-height: 1.4;
@@ -198,6 +204,16 @@ textarea.sfl-source {
   border-radius: 4px;
   box-shadow: none;
   cursor: pointer;
+}
+
+.sfl-btn-icon {
+  display: inline-flex;
+}
+
+.sfl-toolbar .svg-icon,
+.sfl-preview--interactive .sfl-code-footer .svg-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .sfl-toolbar button:hover {
