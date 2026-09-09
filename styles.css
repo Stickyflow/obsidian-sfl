@@ -5,6 +5,18 @@
   max-width: 100%;
 }
 
+/* In Live Preview, Obsidian shows its own "edit this block" affordance — a
+   </> code glyph at the block's top-right — on hover, which lands directly on
+   top of our header toolbar. Our "Code" button already opens the source (with
+   a live preview), so hide Obsidian's for our blocks. If a future Obsidian
+   renames `.edit-block-button` this rule simply stops matching — the Code
+   button still works. */
+.cm-embed-block:has(.sfl-preview) > .edit-block-button,
+.cm-preview-code-block:has(.sfl-preview) > .edit-block-button,
+.markdown-rendered .cm-embed-block:has(.sfl-preview) .edit-block-button {
+  display: none;
+}
+
 .sfl-preview--static {
   overflow: auto;
 }
