@@ -5,15 +5,14 @@
 // viewer needs a live, sized DOM, and its drag-pan would fight the note's own
 // touch-scroll on a phone.
 //
-// A toolbar "Code" button flips a block between the diagram and its SFL source.
-// When the note is in editing mode (Live Preview) that opens a split: the SFL
-// in an editable textarea below a *live* render of whatever you've typed
-// (nothing is written to the note yet). "Save" commits the draft into the
-// fenced block through the note's editor (one step on the undo stack);
-// "Revert" drops it and the preview snaps back to what's in the note. In
-// Reading mode the source is shown read-only. Drag-gesture editing
-// (move/resize/text via `stickyflow/interaction`) is still a later milestone —
-// see README.
+// A header bar carries the controls. The "Code" button flips a block between
+// the diagram and its SFL source. When the note is in editing mode (Live
+// Preview) that opens a split: the SFL in an editable textarea, with an
+// optional *live* render of the draft above it (nothing is written to the note
+// yet). "Save" commits the draft into the fenced block through the note's
+// editor (one step on the undo stack); "Revert" drops it. In Reading mode the
+// source is read-only. Drag-gesture editing (move/resize/text via
+// `stickyflow/interaction`) is still a later milestone — see README.
 import {
   type App,
   type Editor,
@@ -33,20 +32,25 @@ import { createViewer, type Viewer } from 'stickyflow/viewer';
 // block's own text (typing elsewhere in the note, theme change, metadata
 // updates, pane resize, a reading/editing mode switch), each time handing us a
 // fresh `el` and a fresh render child. Without a cache, a new viewer is built
-// every time and the reader's pan/zoom — plus any in-progress edit and its
-// live preview — is thrown away. So the live viewer, its DOM subtree and the
-// current edit state are kept in a module-level map keyed by note path + block
-// start line; a re-render that resolves to the same key re-adopts the existing
-// node (reconciling what it shows) instead of remounting. Refcounted, with a
-// short deferred destroy, so the "tear down then immediately rebuild the same
-// block" churn neither leaks nor thrashes.
+// every time and the reader's pan/zoom — plus any in-progress edit, its live
+// preview, and the textarea caret — is thrown away. So the live viewer, its DOM
+// subtree and the current edit state are kept in a module-level map keyed by
+// note path + block start line; a re-render that resolves to the same key
+// re-adopts the existing node (reconciling what it shows) instead of
+// remounting. Refcounted, with a short deferred destroy, so the "tear down then
+// immediately rebuild the same block" churn neither leaks nor thrashes.
 interface CacheEntry {
   viewer: Viewer;
   rootEl: HTMLElement;
   mounts: number;
   destroyTimer: number | null;
-  /** Tears down the plain-drag-to-pan bridge (see `bindDragPan`). */
-  unbindPan: () => void;
+  /** Tears down the canvas-navigation bridge (see `bindCanvasNav`). */
+  unbindNav: () => void;
+  /** Disconnects the ResizeObserver that auto-refits an un-touched camera. */
+  unbindResize: () => void;
+  /** Set once the reader pans or zooms by hand; cleared by "Fit". While false,
+   *  a block resize refits the diagram; once true, the camera is left alone. */
+  cameraTouched: boolean;
   /** Diagram vs. SFL-source view — the per-block "Code" toggle. */
   showCode: boolean;
   /** In the editing split, whether the live-preview pane is collapsed so the
@@ -60,15 +64,19 @@ interface CacheEntry {
   /** Whether `draft` currently parses — gates Save and the live preview. */
   draftValid: boolean;
   /** The source string the viewer is currently rendering (`source`, or `draft`
-   *  while the editing split is open). Avoids redundant `viewer.update()`s. */
+   *  while the live preview is on). Avoids redundant `viewer.update()`s. */
   rendered: string;
   /** Debounce handle for pushing `draft` into the viewer as you type. */
   liveTimer: number | null;
+  /** Last textarea caret + scroll, restored after a re-render swaps the node. */
+  caret: { start: number; end: number; scrollTop: number } | null;
+  /** Set on Save so the re-render it triggers puts focus back in the textarea. */
+  refocusAfterSave: boolean;
 }
 
 const viewerCache = new Map<string, CacheEntry>();
 const DESTROY_GRACE_MS = 1500;
-const LIVE_PREVIEW_DEBOUNCE_MS = 300;
+const LIVE_PREVIEW_DEBOUNCE_MS = 250;
 
 function hash32(input: string): string {
   let h = 5381;
@@ -91,7 +99,8 @@ function destroyEntry(key: string, entry: CacheEntry): void {
   if (entry.liveTimer !== null) {
     window.clearTimeout(entry.liveTimer);
   }
-  entry.unbindPan();
+  entry.unbindNav();
+  entry.unbindResize();
   entry.viewer.destroy();
   entry.rootEl.remove();
   viewerCache.delete(key);
@@ -133,15 +142,16 @@ function zoomBy(viewer: Viewer, factor: number): void {
 
 const CONTENT_SELECTOR = '[data-sf-id], [data-sf-role], [data-sf-selection-overlay], [data-sf-resize-handle]';
 
-// The viewer only pans on a ctrl/⌘ + drag — a plain drag is deliberately left
-// for the host page to scroll. Inside Obsidian's fixed-height box that's
-// surprising: a reader expects a plain drag on empty canvas to pan, and
-// without it every zoom stays pinned to the centre. Bridge it here without
-// touching the library: while a plain left-drag that started on empty canvas
-// is in progress, re-emit each move as the synthetic ctrl+drag the viewer's
-// own pan handler already acts on, so its viewport state stays consistent with
-// wheel-zoom and Fit. Drags that begin on a shape are left alone (those select).
-function bindDragPan(viewer: Viewer): () => void {
+// Two jobs on the viewer's <svg>:
+//  1. Plain-drag-to-pan. The viewer only pans on a ctrl/⌘ + drag — a plain drag
+//     is deliberately left for the host page to scroll. Inside Obsidian's
+//     fixed-height box that's surprising, and it leaves every zoom pinned to
+//     the centre. So while a plain left-drag that started on empty canvas is in
+//     progress, re-emit each move as the synthetic ctrl+drag the viewer's own
+//     pan handler already acts on. Drags that begin on a shape are left alone.
+//  2. Report any real pan/zoom to `onCameraChange`, so the caller knows the
+//     reader has framed their own view and a block resize shouldn't refit.
+function bindCanvasNav(viewer: Viewer, onCameraChange: () => void): () => void {
   const svg = viewer.svg;
   let panning = false;
 
@@ -165,6 +175,7 @@ function bindDragPan(viewer: Viewer): () => void {
     if (!panning || !event.isTrusted || (event.movementX === 0 && event.movementY === 0)) {
       return;
     }
+    onCameraChange();
     svg.dispatchEvent(
       new PointerEvent('pointermove', {
         ctrlKey: true,
@@ -190,15 +201,23 @@ function bindDragPan(viewer: Viewer): () => void {
     }
   };
 
+  const onWheel = (event: WheelEvent): void => {
+    if (event.isTrusted && (event.ctrlKey || event.metaKey)) {
+      onCameraChange();
+    }
+  };
+
   svg.addEventListener('pointerdown', onDown);
   svg.addEventListener('pointermove', onMove);
   svg.addEventListener('pointerup', onUp);
   svg.addEventListener('pointercancel', onUp);
+  svg.addEventListener('wheel', onWheel, { passive: true });
   return () => {
     svg.removeEventListener('pointerdown', onDown);
     svg.removeEventListener('pointermove', onMove);
     svg.removeEventListener('pointerup', onUp);
     svg.removeEventListener('pointercancel', onUp);
+    svg.removeEventListener('wheel', onWheel);
   };
 }
 
@@ -222,10 +241,17 @@ interface ToolbarHandlers {
   onToggleCode(): void;
 }
 
-// Toolbar: zoom-out  zoom-in  Fit  |  Code/Diagram. `sync()` re-paints the
-// state-dependent bits (Code button icon/label + pressed state, zoom buttons
-// disabled while the SFL source is showing).
-function buildToolbar(handlers: ToolbarHandlers): { bar: HTMLElement; sync(codeShown: boolean): void } {
+interface Toolbar {
+  bar: HTMLElement;
+  /** codeShown drives the Code/Diagram button; zoomEnabled the zoom/Fit trio
+   *  (a diagram has to be on screen for them to do anything). */
+  sync(codeShown: boolean, zoomEnabled: boolean): void;
+  /** Show/clear the "unsaved edits parked in the Code view" dot. */
+  setDirty(dirty: boolean): void;
+}
+
+// Header toolbar: zoom-out  zoom-in  Fit  |  Code/Diagram.
+function buildToolbar(handlers: ToolbarHandlers): Toolbar {
   const bar = createDiv('sfl-toolbar');
   const makeButton = (icon: IconName, label: string, title: string, onClick: () => void): HTMLButtonElement => {
     const button = bar.createEl('button');
@@ -243,20 +269,22 @@ function buildToolbar(handlers: ToolbarHandlers): { bar: HTMLElement; sync(codeS
   bar.createSpan('sfl-sep');
   const code = makeButton('code', 'Code', 'Show the SFL source for this block', handlers.onToggleCode);
 
-  const sync = (codeShown: boolean): void => {
-    paintButton(
-      code,
-      codeShown ? 'image' : 'code',
-      codeShown ? 'Diagram' : 'Code',
-      codeShown ? 'Show the rendered diagram' : 'Show the SFL source for this block',
-    );
-    code.setAttr('aria-pressed', String(codeShown));
-    for (const button of [zoomOut, zoomIn, fit]) {
-      button.disabled = codeShown;
-    }
+  return {
+    bar,
+    sync: (codeShown, zoomEnabled) => {
+      paintButton(
+        code,
+        codeShown ? 'image' : 'code',
+        codeShown ? 'Diagram' : 'Code',
+        codeShown ? 'Show the rendered diagram' : 'Show the SFL source for this block',
+      );
+      code.setAttr('aria-pressed', String(codeShown));
+      for (const button of [zoomOut, zoomIn, fit]) {
+        button.disabled = !zoomEnabled;
+      }
+    },
+    setDirty: (dirty) => code.toggleClass('is-dirty', dirty),
   };
-  sync(handlers.codeShown);
-  return { bar, sync };
 }
 
 // Export / print / PDF render the note into a detached or print-styled
@@ -286,12 +314,26 @@ function renderStatic(container: HTMLElement, source: string): void {
 const OPEN_FENCE = /^\s*(`{3,}|~{3,})\s*sfl\b/;
 const CLOSE_FENCE = /^\s*(`{3,}|~{3,})\s*$/;
 
+const DIAGRAM_HINT = 'Drag to pan · Ctrl/⌘ + scroll to zoom · Fit to reset';
+
+function selectionSummary(owners: Array<{ id: string; kind?: string; label?: string }>): string {
+  if (owners.length === 0) {
+    return '';
+  }
+  if (owners.length > 1) {
+    return `${owners.length} selected`;
+  }
+  const [only] = owners;
+  const name = only.label ? `"${only.label}"` : only.id;
+  return only.kind ? `${name} · ${only.kind}` : name;
+}
+
 interface CodeView {
   el: HTMLElement;
-  /** Show/hide and switch between the read-only overlay, the editing split, and
+  /** Show/hide and switch between the read-only pane, the editing split, and
    *  the editing split with the preview pane collapsed. */
   setMode(showCode: boolean, splitEditing: boolean, previewHidden: boolean): void;
-  /** Re-sync the textarea/`<pre>` from the current entry state. */
+  /** Re-sync the textarea/`<pre>` (and caret) from the current entry state. */
   refresh(): void;
 }
 
@@ -365,7 +407,9 @@ class SflBlock extends MarkdownRenderChild {
       rootEl,
       mounts: 1,
       destroyTimer: null,
-      unbindPan: bindDragPan(viewer),
+      unbindNav: () => {},
+      unbindResize: () => {},
+      cameraTouched: false,
       showCode: false,
       // Default the editing split to textarea-only — you open Code to write
       // SFL; reveal the render with "Show preview" when you want to check it.
@@ -375,25 +419,41 @@ class SflBlock extends MarkdownRenderChild {
       draftValid: true,
       rendered: this.source,
       liveTimer: null,
+      caret: null,
+      refocusAfterSave: false,
     };
+    entry.unbindNav = bindCanvasNav(viewer, () => {
+      entry.cameraTouched = true;
+    });
+    const resizeObserver = new ResizeObserver(() => {
+      if (!entry.cameraTouched) {
+        entry.viewer.fit();
+      }
+    });
+    resizeObserver.observe(rootEl);
+    entry.unbindResize = () => resizeObserver.disconnect();
+
     viewerCache.set(key, entry);
     this.mountInteractive(container, entry);
   }
 
   private mountInteractive(container: HTMLElement, entry: CacheEntry): void {
     container.addClass('sfl-preview--interactive');
-    container.append(entry.rootEl);
 
     const editor = this.editableEditorForNote();
     const editable = editor !== null;
 
+    const header = container.createDiv('sfl-header');
+    const info = header.createDiv('sfl-header-info');
+    container.append(entry.rootEl);
+
     // reconcile() is the single place that decides what the viewer shows and
     // which panes are visible, from the current entry state. Declared before
-    // buildCodeView so its handlers can call it, and called once at the end.
+    // buildCodeView so its handlers can call it; called once at the end.
     function reconcile(): void {
       const splitEditing = entry.showCode && editable;
       const previewOn = splitEditing && !entry.previewHidden;
-      // While the live preview is on, show the draft when it parses; when it
+      // With the live preview on, show the draft when it parses; when it
       // doesn't, hold the last good render rather than snapping back to the
       // saved source on every half-typed keystroke. With the preview collapsed
       // (or in Diagram view) the viewer isn't visible, so leave it be — it's
@@ -413,47 +473,67 @@ class SflBlock extends MarkdownRenderChild {
           /* keep the last good render; parse errors surface in the code view */
         }
       }
-      entry.rootEl.hidden = (entry.showCode && !editable) || (splitEditing && entry.previewHidden);
+      const diagramVisible = !entry.showCode || previewOn;
+      entry.rootEl.hidden = !diagramVisible;
       codeView.setMode(entry.showCode, splitEditing, entry.previewHidden);
       if (entry.showCode) {
         codeView.refresh();
       }
-      paintStatus();
+      toolbar.sync(entry.showCode, diagramVisible);
+      toolbar.setDirty(entry.draft !== entry.source);
+      paintInfo();
     }
 
     const codeView = this.buildCodeView(container, entry, editor, reconcile);
 
-    const status = container.createDiv('sfl-status');
-    function paintStatus(): void {
-      const selection = entry.viewer.getSelection();
-      status.setText(selection.length ? `selected: ${selection.map((owner) => owner.id).join(', ')}` : '');
-      status.hidden = entry.showCode || selection.length === 0;
+    function paintInfo(): void {
+      const summary = selectionSummary(entry.viewer.getSelection());
+      if (summary) {
+        info.setText(summary);
+        info.removeClass('is-hint');
+        return;
+      }
+      info.addClass('is-hint');
+      info.setText(
+        !entry.showCode
+          ? DIAGRAM_HINT
+          : editable
+            ? 'Editing — Save writes the block back into the note'
+            : 'Read-only — open this note in editing mode to change it',
+      );
     }
 
-    const { bar, sync } = buildToolbar({
+    const toolbar = buildToolbar({
       codeShown: entry.showCode,
-      onZoomOut: () => zoomBy(entry.viewer, 1 / 1.2),
-      onZoomIn: () => zoomBy(entry.viewer, 1.2),
-      onFit: () => entry.viewer.fit(),
+      onZoomOut: () => {
+        entry.cameraTouched = true;
+        zoomBy(entry.viewer, 1 / 1.2);
+      },
+      onZoomIn: () => {
+        entry.cameraTouched = true;
+        zoomBy(entry.viewer, 1.2);
+      },
+      onFit: () => {
+        entry.cameraTouched = false;
+        entry.viewer.fit();
+      },
       onToggleCode: () => {
         entry.showCode = !entry.showCode;
-        sync(entry.showCode);
         reconcile();
       },
     });
-    container.append(bar);
+    header.append(toolbar.bar);
 
     reconcile();
     // Unsubscribe on this child's unload; a child that re-adopts a cached
     // viewer registers its own listener the same way.
-    this.register(entry.viewer.on('selectionChange', paintStatus));
+    this.register(entry.viewer.on('selectionChange', paintInfo));
   }
 
-  // The Code view. Editable (textarea + live preview + Save/Revert) when the
-  // note is open in editing mode — there's an editor to write through;
-  // read-only (a <pre>) otherwise, matching the expectation that Reading mode
-  // doesn't edit. `reconcile` is called after every change so the shared
-  // viewer follows the draft.
+  // The Code view. Editable (textarea + optional live preview + Save/Revert)
+  // when the note is open in editing mode — there's an editor to write through;
+  // read-only (a <pre>) otherwise. `reconcile` is called after every change so
+  // the shared viewer follows the draft.
   private buildCodeView(
     container: HTMLElement,
     entry: CacheEntry,
@@ -466,7 +546,6 @@ class SflBlock extends MarkdownRenderChild {
       el.addClass('is-readonly');
       const pre = el.createEl('pre', { cls: 'sfl-source' });
       const code = pre.createEl('code');
-      el.createDiv({ cls: 'sfl-code-hint', text: 'Switch the note to editing mode to change this.' });
       return {
         el,
         setMode: (showCode) => {
@@ -489,6 +568,8 @@ class SflBlock extends MarkdownRenderChild {
       cls: 'sfl-source',
       attr: { spellcheck: 'false', 'aria-label': 'SFL source for this block' },
     });
+    const errorBar = el.createDiv('sfl-code-error');
+    errorBar.hidden = true;
     const footer = el.createDiv('sfl-code-footer');
     const saveBtn = footer.createEl('button', { cls: 'sfl-code-save' });
     paintButton(saveBtn, 'save', 'Save');
@@ -504,25 +585,43 @@ class SflBlock extends MarkdownRenderChild {
       reconcile();
     });
 
-    const setMessage = (text: string, isError = false): void => {
-      message.setText(text);
-      message.toggleClass('is-error', isError);
+    const setStatus = (text: string): void => message.setText(text);
+    const setError = (text: string | null): void => {
+      errorBar.setText(text ?? '');
+      errorBar.hidden = !text;
     };
     const paintButtons = (): void => {
       const dirty = entry.draft !== entry.source;
       saveBtn.disabled = !dirty || !entry.draftValid;
       revertBtn.disabled = !dirty;
     };
+    const rememberCaret = (): void => {
+      entry.caret = {
+        start: textarea.selectionStart,
+        end: textarea.selectionEnd,
+        scrollTop: textarea.scrollTop,
+      };
+    };
+    const restoreCaret = (): void => {
+      if (!entry.caret) {
+        return;
+      }
+      try {
+        textarea.setSelectionRange(entry.caret.start, entry.caret.end);
+        textarea.scrollTop = entry.caret.scrollTop;
+      } catch {
+        /* selection range out of bounds after an external change — ignore */
+      }
+    };
 
     const runLivePreview = (): void => {
       entry.liveTimer = null;
       const error = renderError(entry.draft);
       entry.draftValid = error === null;
-      setMessage(error ?? '', error !== null);
+      setError(error);
       paintButtons();
       reconcile();
     };
-
     const cancelLivePreview = (): void => {
       if (entry.liveTimer !== null) {
         window.clearTimeout(entry.liveTimer);
@@ -532,29 +631,43 @@ class SflBlock extends MarkdownRenderChild {
 
     const save = (): void => {
       cancelLivePreview();
+      // Only arm the post-write refocus when there's an actual change to write —
+      // a no-op save triggers no re-render, so the flag would otherwise linger
+      // and steal focus on some later unrelated re-render.
+      const willWrite = textarea.value.replace(/\s+$/, '') !== entry.source.replace(/\s+$/, '');
+      entry.refocusAfterSave = willWrite && document.activeElement === textarea;
+      rememberCaret();
       const result = this.saveSource(container, entry, textarea.value);
       if (!result.ok) {
-        setMessage(result.message, true);
+        entry.refocusAfterSave = false;
+        setError(result.message);
         return;
       }
       entry.source = result.source;
       entry.draft = result.source;
       entry.draftValid = true;
       textarea.value = result.source;
+      setError(null);
+      setStatus('Saved.');
       paintButtons();
-      setMessage('Saved.');
       reconcile();
     };
 
     textarea.value = entry.draft;
+    restoreCaret(); // re-mount mid-edit: put the caret back where it was
+    for (const type of ['keyup', 'mouseup', 'scroll']) {
+      textarea.addEventListener(type, rememberCaret);
+    }
     textarea.addEventListener('input', () => {
       entry.draft = textarea.value;
-      if (message.hasClass('is-error') === false) {
-        setMessage('');
-      }
+      entry.refocusAfterSave = false;
+      rememberCaret();
+      setStatus('');
+      setError(null);
       cancelLivePreview();
       entry.liveTimer = window.setTimeout(runLivePreview, LIVE_PREVIEW_DEBOUNCE_MS);
       paintButtons();
+      reconcile();
     });
     textarea.addEventListener('keydown', (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
@@ -567,19 +680,26 @@ class SflBlock extends MarkdownRenderChild {
       cancelLivePreview();
       entry.draft = entry.source;
       entry.draftValid = true;
+      entry.caret = null;
       textarea.value = entry.source;
-      setMessage('');
+      setStatus('');
+      setError(null);
       paintButtons();
       reconcile();
     });
 
-    // (Re)mount: re-validate the current draft so the split preview and the
-    // Save button are right even after re-render churn.
+    // (Re)mount: re-validate the current draft so the split preview, the Save
+    // button and any error are right even after re-render churn.
     entry.draftValid = renderError(entry.draft) === null;
-    if (!entry.draftValid && entry.draft !== entry.source) {
-      setMessage(renderError(entry.draft) ?? '', true);
-    }
+    setError(entry.draftValid || entry.draft === entry.source ? null : renderError(entry.draft));
     paintButtons();
+    if (entry.refocusAfterSave) {
+      entry.refocusAfterSave = false;
+      window.setTimeout(() => {
+        textarea.focus();
+        restoreCaret();
+      }, 0);
+    }
 
     return {
       el,
@@ -591,8 +711,8 @@ class SflBlock extends MarkdownRenderChild {
       refresh: () => {
         if (textarea.value !== entry.draft) {
           textarea.value = entry.draft;
+          restoreCaret();
         }
-        setPreviewLabel(previewBtn);
         paintButtons();
       },
     };
