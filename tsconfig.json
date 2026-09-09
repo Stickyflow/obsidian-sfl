@@ -7,7 +7,10 @@
     "target": "ES6",
     "allowJs": true,
     "noImplicitAny": true,
-    "moduleResolution": "node",
+    // "bundler" so `tsc` honours the `stickyflow` package's `exports` map and
+    // can resolve the `stickyflow/viewer` subpath the same way esbuild does at
+    // bundle time. Classic "node" resolution ignores `exports` and can't find it.
+    "moduleResolution": "bundler",
     "importHelpers": true,
     "isolatedModules": true,
     "strict": true,

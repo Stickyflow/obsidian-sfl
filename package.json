@@ -1,7 +1,7 @@
 {
   "name": "obsidian-sfl",
-  "version": "0.1.0",
-  "description": "Obsidian plugin: renders SFL diagram blocks in notes using stickyflow.js. Static preview first (this milestone); interactive/edit-mode is the natural next step, mirroring packages/vscode-sfl-preview.",
+  "version": "0.2.0",
+  "description": "Obsidian plugin: renders SFL diagram blocks in notes using stickyflow.js. Interactive viewer tier (pan/zoom/select) on desktop, static SVG fallback on mobile/export; edit-mode write-back is the next milestone, mirroring packages/vscode-sfl-preview.",
   "private": true,
   "type": "module",
   "scripts": {
