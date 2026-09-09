@@ -46,6 +46,8 @@ interface CacheEntry {
   destroyTimer: number | null;
   /** Tears down the canvas-navigation bridge (see `bindCanvasNav`). */
   unbindNav: () => void;
+  /** Tears down the keyboard camera controls (see `bindKeyboardCamera`). */
+  unbindKeyboard: () => void;
   /** Disconnects the ResizeObserver that auto-refits an un-touched camera. */
   unbindResize: () => void;
   /** Set once the reader pans or zooms by hand; cleared by "Fit". While false,
@@ -100,6 +102,7 @@ function destroyEntry(key: string, entry: CacheEntry): void {
     window.clearTimeout(entry.liveTimer);
   }
   entry.unbindNav();
+  entry.unbindKeyboard();
   entry.unbindResize();
   entry.viewer.destroy();
   entry.rootEl.remove();
@@ -219,6 +222,144 @@ function bindCanvasNav(viewer: Viewer, onCameraChange: () => void): () => void {
     svg.removeEventListener('pointercancel', onUp);
     svg.removeEventListener('wheel', onWheel);
   };
+}
+
+// Pan the viewport by a pixel delta by synthesising the ctrl+drag triplet the
+// viewer's own pointer handler pans on (there's no public pan method). Positive
+// dx/dy move the content right/down (same sense as `panBy`).
+function panByPixels(viewer: Viewer, dx: number, dy: number): void {
+  const svg = viewer.svg;
+  const rect = svg.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const base = { ctrlKey: true, bubbles: true, cancelable: true, pointerId: 1 } as const;
+  svg.dispatchEvent(new PointerEvent('pointerdown', { ...base, button: 0, clientX: cx, clientY: cy }));
+  svg.dispatchEvent(
+    new PointerEvent('pointermove', { ...base, clientX: cx + dx, clientY: cy + dy, movementX: dx, movementY: dy }),
+  );
+  svg.dispatchEvent(new PointerEvent('pointerup', { ...base, clientX: cx + dx, clientY: cy + dy }));
+}
+
+// Keyboard camera control on the diagram: +/- zoom, 0 fit, arrows pan, Esc
+// clears selection. `rootEl` is made programmatically focusable (tabindex -1,
+// not a Tab stop) and takes focus on an empty-canvas click; keydowns from a
+// focused shape inside the <svg> bubble here too.
+function bindKeyboardCamera(rootEl: HTMLElement, entry: CacheEntry): () => void {
+  rootEl.tabIndex = -1;
+  const PAN_STEP = 48;
+
+  const focusSelf = (event: PointerEvent): void => {
+    const target = event.target as Element | null;
+    // Focus the canvas unless the click landed on a focusable shape/link
+    // (those carry tabindex="0" per the DOM contract) or a control.
+    if (!target || target === rootEl || !target.closest('[tabindex="0"], a[href], button, input, textarea')) {
+      rootEl.focus({ preventScroll: true });
+    }
+  };
+
+  const onKeyDown = (event: KeyboardEvent): void => {
+    if (rootEl.offsetParent === null) {
+      return; // canvas hidden (Code view) — don't drive a viewer that isn't on screen
+    }
+    const target = event.target as HTMLElement | null;
+    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable) {
+      return;
+    }
+    const step = event.shiftKey ? PAN_STEP * 2 : PAN_STEP;
+    switch (event.key) {
+      case '+':
+      case '=':
+        entry.cameraTouched = true;
+        zoomBy(entry.viewer, 1.2);
+        break;
+      case '-':
+      case '_':
+        entry.cameraTouched = true;
+        zoomBy(entry.viewer, 1 / 1.2);
+        break;
+      case '0':
+        entry.cameraTouched = false;
+        entry.viewer.fit();
+        break;
+      case 'ArrowLeft':
+        entry.cameraTouched = true;
+        panByPixels(entry.viewer, step, 0);
+        break;
+      case 'ArrowRight':
+        entry.cameraTouched = true;
+        panByPixels(entry.viewer, -step, 0);
+        break;
+      case 'ArrowUp':
+        entry.cameraTouched = true;
+        panByPixels(entry.viewer, 0, step);
+        break;
+      case 'ArrowDown':
+        entry.cameraTouched = true;
+        panByPixels(entry.viewer, 0, -step);
+        break;
+      case 'Escape':
+        entry.viewer.select([]);
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+  };
+
+  rootEl.addEventListener('pointerdown', focusSelf);
+  rootEl.addEventListener('keydown', onKeyDown);
+  return () => {
+    rootEl.removeEventListener('pointerdown', focusSelf);
+    rootEl.removeEventListener('keydown', onKeyDown);
+  };
+}
+
+// --- owner id → source lines (Code view "jump to this shape") -----------------
+// A small brace-depth scan, ported from vscode-sfl-preview/src/sflOwnerBlocks.ts.
+// Approximate on purpose — a reveal location, not a document mutation — so it
+// doesn't need the real lexer (a `{` inside a `"""` string can throw depth off).
+const OWNER_HEADER = /^\s*(Entity|Container|Group|Table|Path|Chart|Link)\s+([A-Za-z_][\w]*)\b/;
+
+function stripStringsAndComments(line: string): string {
+  return line.replace(/\/\/.*$/, '').replace(/"(?:[^"\\]|\\.)*"/g, '""');
+}
+
+function ownerLineRange(lines: string[], id: string): { start: number; end: number } | null {
+  const bare = id.includes('.') ? (id.split('.').pop() ?? id) : id;
+  for (let i = 0; i < lines.length; i++) {
+    const match = lines[i].match(OWNER_HEADER);
+    if (!match || (match[2] !== id && match[2] !== bare)) {
+      continue;
+    }
+    let depth = 0;
+    for (let j = i; j < lines.length; j++) {
+      for (const ch of stripStringsAndComments(lines[j])) {
+        if (ch === '{') depth++;
+        else if (ch === '}' && --depth === 0) return { start: i, end: j };
+      }
+    }
+    return { start: i, end: lines.length - 1 };
+  }
+  return null;
+}
+
+function revealOwnerInTextarea(textarea: HTMLTextAreaElement, text: string, id: string): void {
+  const lines = text.split('\n');
+  const range = ownerLineRange(lines, id);
+  if (!range) {
+    return;
+  }
+  let startCh = 0;
+  for (let i = 0; i < range.start; i++) startCh += lines[i].length + 1;
+  let endCh = startCh;
+  for (let i = range.start; i <= range.end; i++) endCh += lines[i].length + 1;
+  try {
+    textarea.setSelectionRange(startCh, Math.max(startCh, endCh - 1));
+  } catch {
+    return;
+  }
+  const lineHeight = Number.parseFloat(getComputedStyle(textarea).lineHeight) || 18;
+  textarea.scrollTop = Math.max(0, (range.start - 1) * lineHeight);
 }
 
 // A Lucide icon + optional text label inside a <button>. Re-callable to swap
@@ -408,6 +549,7 @@ class SflBlock extends MarkdownRenderChild {
       mounts: 1,
       destroyTimer: null,
       unbindNav: () => {},
+      unbindKeyboard: () => {},
       unbindResize: () => {},
       cameraTouched: false,
       showCode: false,
@@ -425,6 +567,7 @@ class SflBlock extends MarkdownRenderChild {
     entry.unbindNav = bindCanvasNav(viewer, () => {
       entry.cameraTouched = true;
     });
+    entry.unbindKeyboard = bindKeyboardCamera(rootEl, entry);
     const resizeObserver = new ResizeObserver(() => {
       if (!entry.cameraTouched) {
         entry.viewer.fit();
@@ -568,6 +711,14 @@ class SflBlock extends MarkdownRenderChild {
       cls: 'sfl-source',
       attr: { spellcheck: 'false', 'aria-label': 'SFL source for this block' },
     });
+    // Click a shape/link on the canvas → select & scroll to its lines in the
+    // textarea. On real clicks only (not programmatic re-selection during a live
+    // re-render), and the canvas keeps focus so it stays a peek, not a jump.
+    const revealFromCanvas = (owner: { id: string }): void =>
+      revealOwnerInTextarea(textarea, entry.draft, owner.id);
+    this.register(entry.viewer.on('entityClick', (event) => revealFromCanvas(event.owner)));
+    this.register(entry.viewer.on('linkClick', (event) => revealFromCanvas(event.owner)));
+
     const errorBar = el.createDiv('sfl-code-error');
     errorBar.hidden = true;
     const footer = el.createDiv('sfl-code-footer');

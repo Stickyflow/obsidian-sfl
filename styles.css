@@ -167,6 +167,13 @@
   cursor: grabbing;
 }
 
+/* Keyboard focus on the canvas (arrows pan, +/- zoom, 0 fit, Esc clears).
+   :focus-visible so a mouse click doesn't draw the ring. */
+.sfl-preview--interactive .sfl-viewer-root:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: -2px;
+}
+
 .sfl-preview--interactive .sfl-viewer-root[hidden] {
   display: none;
 }

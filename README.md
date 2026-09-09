@@ -5,22 +5,25 @@ notes, using [`stickyflow.js`](../stickyflow.js).
 
 On desktop, each block is a **live viewer** with a **header bar** of controls —
 drag anywhere on the canvas to pan, wheel (or the `−` / `+` / `Fit` buttons) to
-zoom, click a shape or link to select it (the header shows what's selected). The
-block has a `resize: vertical` handle on its bottom edge; while you haven't
-panned or zoomed by hand, resizing refits the diagram automatically (`Fit`
-re-arms that).
+zoom, click a shape or link to select it (the header shows what's selected). With
+the canvas focused (click it, or Tab to a shape) the **keyboard** drives the
+camera too: `+` / `-` zoom, `0` fit, arrow keys pan (Shift = bigger step), `Esc`
+clears the selection. The block has a `resize: vertical` handle on its bottom
+edge; while you haven't panned or zoomed by hand, resizing refits the diagram
+automatically (`Fit` re-arms that).
 
 The header **Code** button flips the block between the diagram and its SFL
 source; a dot on the button marks unsaved edits parked in the Code view.
 
 - **Editing mode (Live Preview):** an editable textarea, with `Show preview`
   splitting in a live render of your draft above it — type and it updates as you
-  go, nothing written to the note. `Save` (or `Ctrl`/`⌘`+`Enter`) commits the
-  draft into the fenced block through the note's editor (one step on the undo
-  stack, caret preserved across the re-render); `Revert` drops it. An
-  unparseable draft holds the last good render and shows the (wrapping) error
-  above the footer; `Save` stays disabled until it parses. The preview starts
-  collapsed.
+  go, nothing written to the note. **Click a shape in the preview** and the
+  textarea scrolls to and selects that entity's lines. `Save` (or
+  `Ctrl`/`⌘`+`Enter`) commits the draft into the fenced block through the note's
+  editor (one step on the undo stack, caret preserved across the re-render);
+  `Revert` drops it. An unparseable draft holds the last good render and shows
+  the (wrapping) error above the footer; `Save` stays disabled until it parses.
+  The preview starts collapsed.
 - **Reading mode:** the source is shown read-only.
 
 Dragging shapes on the canvas still doesn't edit anything — gesture editing
@@ -89,10 +92,10 @@ run **Developer: Reload app without saving** (Ctrl/Cmd+P) or restart.
   body in one `replaceRange`; there's no per-property patching, and the guard
   against a concurrent external edit is a re-read immediately before the write,
   not a version stamp.
-- **No selection sync** between the canvas and the editor cursor, and no
-  click-a-shape-to-jump-to-its-source in the Code view
-  (`vscode-sfl-preview/src/sflOwnerBlocks.ts` is the port target).
-- **No keyboard camera control** — no `+`/`-`/`0` or arrow-pan; only the header
-  buttons and wheel.
+- **No editor↔canvas selection sync.** Clicking a shape in the Code-view
+  preview reveals its lines in the textarea (a brace-depth scan, approximate —
+  ported from `vscode-sfl-preview/src/sflOwnerBlocks.ts`), but there's no
+  reverse (cursor in the source → highlight on the canvas) and it doesn't touch
+  the note's own editor selection.
 - **Not published** to the Obsidian community plugin directory — install
   manually as above.
