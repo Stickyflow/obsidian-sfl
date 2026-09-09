@@ -5,11 +5,16 @@ notes, using [`stickyflow.js`](../stickyflow.js).
 
 On desktop, each block is a **live viewer** — drag anywhere on the canvas to
 pan, wheel (or the `−` / `+` / `Fit` toolbar) to zoom, click a shape or link to
-select it. A **Code** button on the toolbar flips the block between the diagram
-and its raw SFL source (selectable, so you can copy it). The block has a
-`resize: vertical` handle on its bottom edge. It stays **read-only**: no canvas
-gesture writes back to the note (edit mode is the next milestone — see
-[Known gaps](#known-gaps)).
+select it. The block has a `resize: vertical` handle on its bottom edge.
+
+A toolbar **Code** button flips the block between the diagram and its SFL
+source. When the note is open in **editing mode** (Live Preview) that source is
+an **editable textarea** — `Save` (or `Ctrl`/`⌘`+`Enter`) validates it, writes
+the new text back into the fenced block through the note's editor (so it's one
+step on the normal undo stack), and re-renders in place. In **Reading mode**
+the source is shown read-only. Dragging shapes on the canvas still doesn't edit
+anything — gesture editing (move/resize/text via `stickyflow/interaction`) is a
+later milestone, see [Known gaps](#known-gaps).
 
 > The `stickyflow/viewer` tier itself only pans on ctrl/⌘ + drag (a plain drag
 > is left for a host page to scroll); the plugin bridges plain-drag-to-pan on
@@ -60,17 +65,19 @@ run **Developer: Reload app without saving** (Ctrl/Cmd+P) or restart.
 
 ## Known gaps
 
-- **No edit-mode / interaction tier.** `stickyflow/viewer` (pan/zoom/select) is
-  wired in; `stickyflow/interaction` (drag/resize/text-edit/link-reconnect, the
-  pure `applyMoveChange`/`applyTextChange`/`insertEntity` patchers, `+ Entity` /
-  `+ Link`, delete) is not. Editing an entity still means editing the SFL text.
-  The plan is a per-block **Edit / Done** toggle that binds the interaction tier
-  and patches each committed gesture back into the fenced block's body via
-  `ctx.getSectionInfo` + `MarkdownView.editor.replaceRange` (on Obsidian's undo
-  stack) — `vscode-sfl-preview/src/{getWebviewHtml,panel}.ts` is the reference,
-  writing through the CM6 editor instead of a VS Code `WorkspaceEdit`. The
-  module-level viewer cache in `src/main.ts` is the foundation its remount guard
-  needs.
+- **No canvas-gesture editing.** Text edits go through the Code view's textarea
+  (whole-body replace via `ctx.getSectionInfo` + `editor.replaceRange`).
+  `stickyflow/interaction` — drag-to-move/resize, double-click text edit,
+  link-reconnect, `+ Entity` / `+ Link`, delete, with the pure
+  `applyMoveChange` / `applyTextChange` / `insertEntity` patchers producing
+  surgical (not whole-body) diffs — is not wired in.
+  `vscode-sfl-preview/src/{getWebviewHtml,panel}.ts` is the reference. The
+  module-level viewer cache in `src/main.ts` (and the `saveSource` write-back)
+  is the foundation.
+- **Whole-body write-back.** A Code-view save replaces the entire fenced block
+  body in one `replaceRange`; there's no per-property patching, and the guard
+  against a concurrent external edit is a re-read immediately before the write,
+  not a version stamp.
 - **No selection sync** between the canvas and the editor cursor
   (`vscode-sfl-preview/src/sflOwnerBlocks.ts` is the port target).
 - **No resize refit.** Dragging the block's `resize` handle stretches the SVG;
