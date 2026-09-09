@@ -15,24 +15,118 @@
   height: auto;
 }
 
-/* Interactive viewer: a fixed-height, user-resizable card laid out as a column
-   — the diagram fills it, and the editable Code view (when open) is a pane
-   docked under it. The light "card" background is on the container, never the
-   SVG: the rendered diagram's text is tuned for a light canvas and would be
-   unreadable on a dark theme against a transparent background. */
+/* Interactive card: a fixed-height, user-resizable column — a header of
+   controls, then the diagram (or, with "Code" on, the SFL source). Theme-aware
+   surface: SFL styles its own colours, so a native background reads fine in
+   either theme. */
 .sfl-preview--interactive {
-  position: relative;
   display: flex;
   flex-direction: column;
   height: 480px;
-  min-height: 200px;
+  min-height: 220px;
   overflow: hidden;
   resize: vertical;
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--background-primary);
 }
 
+/* --- header ------------------------------------------------------------- */
+.sfl-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 10px;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.sfl-header-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-normal);
+}
+
+.sfl-header-info.is-hint {
+  color: var(--text-muted);
+}
+
+.sfl-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.sfl-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-normal);
+  background: var(--interactive-normal);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.sfl-toolbar button:hover {
+  background: var(--interactive-hover);
+}
+
+.sfl-toolbar button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.sfl-toolbar button[aria-pressed='true'] {
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+  border-color: var(--interactive-accent);
+}
+
+/* "Unsaved edits parked in the Code view" marker on the Code/Diagram button. */
+.sfl-toolbar button.is-dirty {
+  position: relative;
+}
+
+.sfl-toolbar button.is-dirty::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-accent, var(--interactive-accent));
+  border: 1px solid var(--background-secondary);
+}
+
+.sfl-toolbar .sfl-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 1px;
+  background: var(--background-modifier-border);
+}
+
+.sfl-btn-icon {
+  display: inline-flex;
+}
+
+.sfl-toolbar .svg-icon,
+.sfl-preview--interactive .sfl-code-footer .svg-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* --- diagram ---------------------------------------------------------------- */
 .sfl-preview--interactive .sfl-viewer-root {
   flex: 1 1 0;
   min-height: 0;
@@ -59,9 +153,11 @@
   cursor: pointer;
 }
 
-/* SFL source view, behind the "Code" toggle. In editing mode it's the bottom
-   pane of a split (textarea + Save/Revert footer) under a live render of the
-   draft; in Reading mode it's a read-only <pre> filling the whole card. */
+/* --- SFL source view ----------------------------------------------------- */
+/* In editing mode: the bottom pane of a split (textarea + error bar + footer)
+   under a live render of the draft, or the whole area with the preview
+   collapsed. In Reading mode: a read-only <pre> filling the area below the
+   header. */
 .sfl-preview--interactive .sfl-code-view {
   display: flex;
   flex-direction: column;
@@ -74,20 +170,14 @@
   display: none;
 }
 
-.sfl-preview--interactive .sfl-code-view.is-readonly {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
+.sfl-preview--interactive .sfl-code-view.is-readonly,
+.sfl-preview--interactive .sfl-code-view.is-split.is-full {
+  flex: 1 1 auto;
 }
 
 .sfl-preview--interactive .sfl-code-view.is-split {
   flex: 0 0 42%;
   border-top: 1px solid var(--background-modifier-border);
-}
-
-/* Preview pane collapsed — the textarea takes the whole card. */
-.sfl-preview--interactive .sfl-code-view.is-split.is-full {
-  flex: 1 1 auto;
 }
 
 .sfl-preview--interactive .sfl-source {
@@ -119,30 +209,38 @@ textarea.sfl-source {
   white-space: inherit;
 }
 
-.sfl-preview--interactive .sfl-code-hint,
-.sfl-preview--interactive .sfl-code-message {
+/* Parse errors while editing — wraps, scrolls if long, sits between the
+   textarea and the footer. */
+.sfl-preview--interactive .sfl-code-error {
+  flex: 0 0 auto;
+  max-height: 5.5em;
+  padding: 6px 12px;
+  overflow-y: auto;
   font-size: 11px;
-  color: var(--text-muted);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  color: var(--text-error);
+  background: var(--background-modifier-error-hover, rgba(220, 38, 38, 0.08));
+  border-top: 1px solid var(--background-modifier-border);
 }
 
-.sfl-preview--interactive .sfl-code-hint {
-  padding: 6px 14px 10px;
+.sfl-preview--interactive .sfl-code-footer {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--background-modifier-border);
 }
 
 .sfl-preview--interactive .sfl-code-message {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
+  font-size: 11px;
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-
-.sfl-preview--interactive .sfl-code-footer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-top: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
 }
 
 .sfl-preview--interactive .sfl-code-footer .sfl-preview-toggle {
@@ -176,84 +274,6 @@ textarea.sfl-source {
   background: var(--interactive-accent);
   color: var(--text-on-accent);
   border-color: var(--interactive-accent);
-}
-
-.sfl-preview--interactive .sfl-code-message.is-error {
-  color: var(--text-error);
-}
-
-.sfl-toolbar {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 2;
-  display: flex;
-  gap: 4px;
-}
-
-.sfl-toolbar button {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--text-normal);
-  background: var(--interactive-normal);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 4px;
-  box-shadow: none;
-  cursor: pointer;
-}
-
-.sfl-btn-icon {
-  display: inline-flex;
-}
-
-.sfl-toolbar .svg-icon,
-.sfl-preview--interactive .sfl-code-footer .svg-icon {
-  width: 14px;
-  height: 14px;
-}
-
-.sfl-toolbar button:hover {
-  background: var(--interactive-hover);
-}
-
-.sfl-toolbar button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.sfl-toolbar button[aria-pressed='true'] {
-  color: var(--text-on-accent);
-  background: var(--interactive-accent);
-  border-color: var(--interactive-accent);
-}
-
-.sfl-toolbar .sfl-sep {
-  width: 1px;
-  align-self: stretch;
-  margin: 2px 1px;
-  background: var(--background-modifier-border);
-}
-
-.sfl-status {
-  position: absolute;
-  left: 8px;
-  bottom: 6px;
-  z-index: 2;
-  max-width: calc(100% - 16px);
-  padding: 1px 6px;
-  overflow: hidden;
-  font-size: 11px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--text-muted);
-  background: var(--background-primary);
-  border-radius: 4px;
-  opacity: 0.85;
-  pointer-events: none;
 }
 
 .sfl-preview-error {

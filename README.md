@@ -3,21 +3,24 @@
 Obsidian plugin: renders fenced ` ```sfl ` code blocks as diagrams inside
 notes, using [`stickyflow.js`](../stickyflow.js).
 
-On desktop, each block is a **live viewer** — drag anywhere on the canvas to
-pan, wheel (or the `−` / `+` / `Fit` toolbar) to zoom, click a shape or link to
-select it. The block has a `resize: vertical` handle on its bottom edge.
+On desktop, each block is a **live viewer** with a **header bar** of controls —
+drag anywhere on the canvas to pan, wheel (or the `−` / `+` / `Fit` buttons) to
+zoom, click a shape or link to select it (the header shows what's selected). The
+block has a `resize: vertical` handle on its bottom edge; while you haven't
+panned or zoomed by hand, resizing refits the diagram automatically (`Fit`
+re-arms that).
 
-A toolbar **Code** button flips the block between the diagram and its SFL
-source.
+The header **Code** button flips the block between the diagram and its SFL
+source; a dot on the button marks unsaved edits parked in the Code view.
 
-- **Editing mode (Live Preview):** the block splits into a live render of your
-  draft above an editable textarea. Type and the diagram updates as you go —
-  nothing is written to the note yet. `Save` (or `Ctrl`/`⌘`+`Enter`) commits
-  the draft into the fenced block through the note's editor (one step on the
-  undo stack); `Revert` drops it and the preview snaps back to what's in the
-  note. An unparseable draft holds the last good render and shows the error in
-  the footer; `Save` stays disabled until it parses. `Hide preview` collapses
-  the render pane so the textarea gets the whole box.
+- **Editing mode (Live Preview):** an editable textarea, with `Show preview`
+  splitting in a live render of your draft above it — type and it updates as you
+  go, nothing written to the note. `Save` (or `Ctrl`/`⌘`+`Enter`) commits the
+  draft into the fenced block through the note's editor (one step on the undo
+  stack, caret preserved across the re-render); `Revert` drops it. An
+  unparseable draft holds the last good render and shows the (wrapping) error
+  above the footer; `Save` stays disabled until it parses. The preview starts
+  collapsed.
 - **Reading mode:** the source is shown read-only.
 
 Dragging shapes on the canvas still doesn't edit anything — gesture editing
@@ -26,7 +29,7 @@ Dragging shapes on the canvas still doesn't edit anything — gesture editing
 
 > The `stickyflow/viewer` tier itself only pans on ctrl/⌘ + drag (a plain drag
 > is left for a host page to scroll); the plugin bridges plain-drag-to-pan on
-> top of it (`bindDragPan` in `src/main.ts`) since inside a fixed-height block
+> top of it (`bindCanvasNav` in `src/main.ts`) since inside a fixed-height block
 > that's what a reader expects.
 
 On **mobile**, and in **export / print / PDF**, it falls back to the static
@@ -86,9 +89,10 @@ run **Developer: Reload app without saving** (Ctrl/Cmd+P) or restart.
   body in one `replaceRange`; there's no per-property patching, and the guard
   against a concurrent external edit is a re-read immediately before the write,
   not a version stamp.
-- **No selection sync** between the canvas and the editor cursor
+- **No selection sync** between the canvas and the editor cursor, and no
+  click-a-shape-to-jump-to-its-source in the Code view
   (`vscode-sfl-preview/src/sflOwnerBlocks.ts` is the port target).
-- **No resize refit.** Dragging the block's `resize` handle stretches the SVG;
-  the viewport doesn't refit until you click `Fit`.
+- **No keyboard camera control** — no `+`/`-`/`0` or arrow-pan; only the header
+  buttons and wheel.
 - **Not published** to the Obsidian community plugin directory — install
   manually as above.
