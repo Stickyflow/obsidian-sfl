@@ -374,3 +374,13 @@ textarea.sfl-source {
 .sfl-preview-modal [data-sf-role='link'] {
   cursor: pointer;
 }
+
+/* The viewer tier always paints a "quick duplicate" (+) bubble on each side
+   of a selected entity, an editing affordance from `stickyflow/interaction`
+   this plugin doesn't wire up. Selecting a shape here is for inspection only,
+   so hide the bubbles (and their plus glyph, the bubble's next sibling) in
+   the modal. The resize-handle ring is left alone, it's just a visual frame. */
+.sfl-preview-modal [data-sf-quick-duplicate],
+.sfl-preview-modal [data-sf-quick-duplicate] + path {
+  display: none;
+}
