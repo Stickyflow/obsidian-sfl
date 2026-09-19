@@ -320,3 +320,57 @@ textarea.sfl-source {
   font-size: 0.85em;
   padding: 8px;
 }
+
+/* --- bigger preview modal ------------------------------------------------- */
+/* Near-fullscreen: a header row (info + zoom/Fit toolbar), then the viewer
+   filling the rest. No Code view, so none of the split/textarea rules apply
+   here; only the pieces the modal actually uses are duplicated below since
+   they're scoped to `.sfl-preview--interactive` in the block's own styling. */
+.sfl-preview-modal.modal {
+  display: flex;
+  flex-direction: column;
+  width: min(96vw, 1600px);
+  height: min(92vh, 1000px);
+  max-width: 96vw;
+  max-height: 92vh;
+}
+
+.sfl-preview-modal .modal-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.sfl-preview-modal .sfl-header {
+  flex: 0 0 auto;
+}
+
+.sfl-preview-modal .sfl-viewer-root {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  cursor: grab;
+}
+
+.sfl-preview-modal .sfl-viewer-root:active {
+  cursor: grabbing;
+}
+
+.sfl-preview-modal .sfl-viewer-root:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: -2px;
+}
+
+.sfl-preview-modal .sfl-viewer-root svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.sfl-preview-modal [data-sf-role='entity'],
+.sfl-preview-modal [data-sf-role='link'] {
+  cursor: pointer;
+}
