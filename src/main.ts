@@ -20,6 +20,7 @@ import {
   MarkdownRenderChild,
   type MarkdownPostProcessorContext,
   MarkdownView,
+  Modal,
   Platform,
   Plugin,
   setIcon,
@@ -240,11 +241,20 @@ function panByPixels(viewer: Viewer, dx: number, dy: number): void {
   svg.dispatchEvent(new PointerEvent('pointerup', { ...base, clientX: cx + dx, clientY: cy + dy }));
 }
 
+// The subset of camera-related state `bindKeyboardCamera` needs: enough to
+// drive zoom/pan and remember whether the reader has taken control of the
+// camera by hand. A block's `CacheEntry` satisfies this structurally; the
+// preview modal (which has no `CacheEntry` of its own) passes a bare object.
+interface CameraState {
+  viewer: Viewer;
+  cameraTouched: boolean;
+}
+
 // Keyboard camera control on the diagram: +/- zoom, 0 fit, arrows pan, Esc
 // clears selection. `rootEl` is made programmatically focusable (tabindex -1,
 // not a Tab stop) and takes focus on an empty-canvas click; keydowns from a
 // focused shape inside the <svg> bubble here too.
-function bindKeyboardCamera(rootEl: HTMLElement, entry: CacheEntry): () => void {
+function bindKeyboardCamera(rootEl: HTMLElement, state: CameraState): () => void {
   rootEl.tabIndex = -1;
   const PAN_STEP = 48;
 
@@ -269,36 +279,36 @@ function bindKeyboardCamera(rootEl: HTMLElement, entry: CacheEntry): () => void 
     switch (event.key) {
       case '+':
       case '=':
-        entry.cameraTouched = true;
-        zoomBy(entry.viewer, 1.2);
+        state.cameraTouched = true;
+        zoomBy(state.viewer, 1.2);
         break;
       case '-':
       case '_':
-        entry.cameraTouched = true;
-        zoomBy(entry.viewer, 1 / 1.2);
+        state.cameraTouched = true;
+        zoomBy(state.viewer, 1 / 1.2);
         break;
       case '0':
-        entry.cameraTouched = false;
-        entry.viewer.fit();
+        state.cameraTouched = false;
+        state.viewer.fit();
         break;
       case 'ArrowLeft':
-        entry.cameraTouched = true;
-        panByPixels(entry.viewer, step, 0);
+        state.cameraTouched = true;
+        panByPixels(state.viewer, step, 0);
         break;
       case 'ArrowRight':
-        entry.cameraTouched = true;
-        panByPixels(entry.viewer, -step, 0);
+        state.cameraTouched = true;
+        panByPixels(state.viewer, -step, 0);
         break;
       case 'ArrowUp':
-        entry.cameraTouched = true;
-        panByPixels(entry.viewer, 0, step);
+        state.cameraTouched = true;
+        panByPixels(state.viewer, 0, step);
         break;
       case 'ArrowDown':
-        entry.cameraTouched = true;
-        panByPixels(entry.viewer, 0, -step);
+        state.cameraTouched = true;
+        panByPixels(state.viewer, 0, -step);
         break;
       case 'Escape':
-        entry.viewer.select([]);
+        state.viewer.select([]);
         break;
       default:
         return;
@@ -374,11 +384,30 @@ function paintButton(button: HTMLElement, icon: IconName, label: string, title =
   button.setAttr('title', title);
 }
 
+// A <button> painted by paintButton and wired to a click handler. Shared by
+// the block toolbar and the preview modal's own (smaller) toolbar.
+function makeIconButton(
+  parent: HTMLElement,
+  icon: IconName,
+  label: string,
+  title: string,
+  onClick: () => void,
+): HTMLButtonElement {
+  const button = parent.createEl('button');
+  paintButton(button, icon, label, title);
+  button.addEventListener('click', (event) => {
+    event.preventDefault();
+    onClick();
+  });
+  return button;
+}
+
 interface ToolbarHandlers {
   codeShown: boolean;
   onZoomOut(): void;
   onZoomIn(): void;
   onFit(): void;
+  onExpand(): void;
   onToggleCode(): void;
 }
 
@@ -391,24 +420,16 @@ interface Toolbar {
   setDirty(dirty: boolean): void;
 }
 
-// Header toolbar: zoom-out  zoom-in  Fit  |  Code/Diagram.
+// Header toolbar: zoom-out  zoom-in  Fit  |  Expand  |  Code/Diagram.
 function buildToolbar(handlers: ToolbarHandlers): Toolbar {
   const bar = createDiv('sfl-toolbar');
-  const makeButton = (icon: IconName, label: string, title: string, onClick: () => void): HTMLButtonElement => {
-    const button = bar.createEl('button');
-    paintButton(button, icon, label, title);
-    button.addEventListener('click', (event) => {
-      event.preventDefault();
-      onClick();
-    });
-    return button;
-  };
-
-  const zoomOut = makeButton('zoom-out', '', 'Zoom out', handlers.onZoomOut);
-  const zoomIn = makeButton('zoom-in', '', 'Zoom in', handlers.onZoomIn);
-  const fit = makeButton('maximize', 'Fit', 'Fit diagram to view', handlers.onFit);
+  const zoomOut = makeIconButton(bar, 'zoom-out', '', 'Zoom out', handlers.onZoomOut);
+  const zoomIn = makeIconButton(bar, 'zoom-in', '', 'Zoom in', handlers.onZoomIn);
+  const fit = makeIconButton(bar, 'maximize', 'Fit', 'Fit diagram to view', handlers.onFit);
   bar.createSpan('sfl-sep');
-  const code = makeButton('code', 'Code', 'Show the SFL source for this block', handlers.onToggleCode);
+  makeIconButton(bar, 'expand', 'Expand', 'Open a bigger preview', handlers.onExpand);
+  bar.createSpan('sfl-sep');
+  const code = makeIconButton(bar, 'code', 'Code', 'Show the SFL source for this block', handlers.onToggleCode);
 
   return {
     bar,
@@ -478,6 +499,107 @@ interface CodeView {
   refresh(): void;
 }
 
+// --- bigger preview modal -----------------------------------------------------
+// The header's "Expand" button pops the diagram open in a near-fullscreen
+// modal for a closer look: pan, zoom, click-to-select, nothing else. No Code
+// view, no Save/Revert, no write-back. It mounts its own `Viewer` over a
+// snapshot of the SFL text that was on screen when it opened, and tears that
+// viewer down on close; it doesn't track further edits to the block while
+// it's open, so reopen it to see a newer draft.
+class SflPreviewModal extends Modal {
+  private cleanup: (() => void) | null = null;
+
+  constructor(
+    app: App,
+    private readonly source: string,
+    private readonly diagramId: string,
+  ) {
+    super(app);
+  }
+
+  onOpen(): void {
+    this.modalEl.addClass('sfl-preview-modal');
+    this.setTitle('Diagram preview');
+    this.contentEl.addClass('sfl-preview-modal-content');
+
+    const header = this.contentEl.createDiv('sfl-header');
+    const info = header.createDiv('sfl-header-info');
+    info.addClass('is-hint');
+    info.setText(DIAGRAM_HINT);
+    const toolbar = header.createDiv('sfl-toolbar');
+
+    const rootEl = this.contentEl.createDiv('sfl-viewer-root');
+
+    let viewer: Viewer;
+    try {
+      viewer = createViewer({
+        container: rootEl,
+        source: this.source,
+        interactive: true,
+        selectable: true,
+        diagramId: this.diagramId,
+      });
+    } catch (error) {
+      rootEl.createEl('pre', { cls: 'sfl-preview-error', text: `SFL parse error: ${errorMessage(error)}` });
+      return;
+    }
+    viewer.on('ready', () => viewer.fit());
+
+    const camera: CameraState = { viewer, cameraTouched: false };
+    makeIconButton(toolbar, 'zoom-out', '', 'Zoom out', () => {
+      camera.cameraTouched = true;
+      zoomBy(viewer, 1 / 1.2);
+    });
+    makeIconButton(toolbar, 'zoom-in', '', 'Zoom in', () => {
+      camera.cameraTouched = true;
+      zoomBy(viewer, 1.2);
+    });
+    makeIconButton(toolbar, 'maximize', 'Fit', 'Fit diagram to view', () => {
+      camera.cameraTouched = false;
+      viewer.fit();
+    });
+
+    const paintInfo = (): void => {
+      const summary = selectionSummary(viewer.getSelection());
+      if (summary) {
+        info.setText(summary);
+        info.removeClass('is-hint');
+        return;
+      }
+      info.addClass('is-hint');
+      info.setText(DIAGRAM_HINT);
+    };
+
+    const unbindNav = bindCanvasNav(viewer, () => {
+      camera.cameraTouched = true;
+    });
+    const unbindKeyboard = bindKeyboardCamera(rootEl, camera);
+    const resizeObserver = new ResizeObserver(() => {
+      if (!camera.cameraTouched) {
+        viewer.fit();
+      }
+    });
+    resizeObserver.observe(rootEl);
+    const unsubscribeSelection = viewer.on('selectionChange', paintInfo);
+
+    this.cleanup = () => {
+      unsubscribeSelection();
+      unbindNav();
+      unbindKeyboard();
+      resizeObserver.disconnect();
+      viewer.destroy();
+    };
+
+    window.setTimeout(() => rootEl.focus({ preventScroll: true }), 0);
+  }
+
+  onClose(): void {
+    this.cleanup?.();
+    this.cleanup = null;
+    this.contentEl.empty();
+  }
+}
+
 // --- render child ------------------------------------------------------------
 class SflBlock extends MarkdownRenderChild {
   private key: string | null = null;
@@ -521,7 +643,7 @@ class SflBlock extends MarkdownRenderChild {
           cached.draftValid = true;
         }
       }
-      this.mountInteractive(container, cached);
+      this.mountInteractive(container, cached, key);
       return;
     }
 
@@ -577,10 +699,10 @@ class SflBlock extends MarkdownRenderChild {
     entry.unbindResize = () => resizeObserver.disconnect();
 
     viewerCache.set(key, entry);
-    this.mountInteractive(container, entry);
+    this.mountInteractive(container, entry, key);
   }
 
-  private mountInteractive(container: HTMLElement, entry: CacheEntry): void {
+  private mountInteractive(container: HTMLElement, entry: CacheEntry, key: string): void {
     container.addClass('sfl-preview--interactive');
 
     const editor = this.editableEditorForNote();
@@ -659,6 +781,9 @@ class SflBlock extends MarkdownRenderChild {
       onFit: () => {
         entry.cameraTouched = false;
         entry.viewer.fit();
+      },
+      onExpand: () => {
+        new SflPreviewModal(this.app, entry.rendered, `${key}:modal`).open();
       },
       onToggleCode: () => {
         entry.showCode = !entry.showCode;

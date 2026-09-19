@@ -15,6 +15,12 @@ automatically (`Fit` re-arms that).
 The header **Code** button flips the block between the diagram and its SFL
 source; a dot on the button marks unsaved edits parked in the Code view.
 
+The header **Expand** button opens the diagram in a near-fullscreen modal for
+a closer look: the same pan, wheel-zoom and click-to-select as the block, plus
+its own zoom-out/zoom-in/Fit toolbar, but no Code view and no write-back. It's
+a snapshot of what's currently rendered, so further edits to the block aren't
+reflected until you reopen it.
+
 - **Editing mode (Live Preview):** an editable textarea, with `Show preview`
   splitting in a live render of your draft above it — type and it updates as you
   go, nothing written to the note. **Click a shape in the preview** and the
