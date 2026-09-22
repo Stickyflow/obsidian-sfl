@@ -1,4 +1,14 @@
+<p align="center">
+  <img src="assets/Distel.png" alt="StickyFlow" width="900">
+</p>
+
+<div align="center">
+
 # obsidian-sfl
+
+**Live SFL diagrams inside your Obsidian notes.**
+
+</div>
 
 Obsidian plugin: renders fenced ` ```sfl ` code blocks as diagrams inside
 notes, using [`stickyflow.js`](../stickyflow.js).
