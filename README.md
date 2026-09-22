@@ -93,6 +93,40 @@ On **mobile**, and in **export / print / PDF**, it falls back to the static
 tier (`render(sfl) → svg`) — the viewer needs a live, sized DOM, and drag-pan
 would fight the note's touch-scroll on a phone.
 
+## Example workflow: working with an LLM
+
+An SFL diagram is just text, so any LLM that can write into your vault can
+generate one directly into a note the same way it writes any other text: no
+export step, nothing specific to this plugin on the LLM's side.
+
+Getting an LLM read/write access to your vault at all needs a one-time setup
+this plugin has nothing to do with: install the [Local REST
+API](https://github.com/coddingtonbear/obsidian-local-rest-api) community
+plugin (Settings → Community plugins → Browse → search "Local REST API"),
+copy the API key from its settings, and point your LLM client at the MCP
+server it exposes (`https://127.0.0.1:27124/mcp/`, plain HTTP on `27123` to
+skip the local cert) with that key as a bearer token. It's a standard MCP
+server, so this works the same way for Claude (Claude Desktop, Claude Code),
+Cursor, or any other MCP-compatible client: point the client's MCP config at
+the URL, not something specific to one of them.
+
+Once that's wired up:
+
+1. Ask the LLM to write a note about a topic and include a diagram: a
+   process, a system architecture, a taxonomy. It writes the SFL source
+   into a fenced ` ```sfl ` code block, the same as it would write any
+   other markdown.
+2. Open the note in Obsidian. This plugin renders the block immediately as
+   a live, interactive diagram, no round-trip back to the LLM needed just
+   to see it.
+3. From there it's yours: pan, zoom, click a shape to jump to its source
+   in the Code view, or edit the SFL directly and watch the live preview
+   update as you type. `Save` writes your changes back into the note.
+4. The round trip closes the other way too: ask the LLM questions about the
+   note, or ask it to change the diagram, and through the same MCP server
+   it reads the note back and can answer from, or rewrite, the SFL source
+   itself, not a picture of it, then this plugin renders whatever it wrote.
+
 ## Build
 
 ```bash
