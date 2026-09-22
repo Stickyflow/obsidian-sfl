@@ -6,12 +6,51 @@
 
 # obsidian-sfl
 
-**Live SFL diagrams inside your Obsidian notes.**
+**An Obsidian community plugin for rendering diagrams in your notes.**
 
 </div>
 
-Obsidian plugin: renders fenced ` ```sfl ` code blocks as diagrams inside
-notes, using [`stickyflow.js`](../stickyflow.js).
+Perfect for learning notes and visualizing concepts across all kinds of
+domains: software engineering, mathematics, gaming taxonomies, and more.
+Fenced ` ```sfl ` code blocks render as live, interactive diagrams inside
+your notes, using [`stickyflow.js`](../stickyflow.js) (SFL 1.4).
+
+## Why obsidian-sfl?
+
+A diagram usually lives outside your notes: a separate whiteboard tab, a
+pasted screenshot, an embedded image that goes stale the moment the idea
+changes. An SFL diagram is just text, so it stays inside the note itself. It
+moves, renames, and version-controls with the note, and it never drifts out
+of sync with what you meant, since there's no separate copy to drift.
+
+That fits how notes actually get used for thinking and learning: turning a
+new concept into a picture instead of a wall of prose, mapping out a system
+before writing about it, or keeping a precise diagram next to the
+explanation it belongs to. Software engineering architecture, mathematical
+structures, gaming taxonomies: anything you'd otherwise sketch on a
+whiteboard works just as well typed directly into the note.
+
+<p align="center">
+  <img src="assets/screenshot-gaming-taxonomy.png" alt="A gaming genre taxonomy diagram, rendered live from a fenced sfl code block in an Obsidian note" width="650">
+</p>
+
+## Installation
+
+1. Build the plugin (see [Build](#build)) to produce `manifest.json`,
+   `main.js` and `styles.css`.
+2. Copy those three files into your vault, in a folder named after the
+   plugin:
+   ```bash
+   mkdir -p "<vault>/.obsidian/plugins/obsidian-sfl"
+   cp manifest.json main.js styles.css "<vault>/.obsidian/plugins/obsidian-sfl/"
+   ```
+3. In Obsidian, open **Settings → Community plugins**. Turn off
+   **Restricted mode** if this is your first community plugin.
+4. Find **SFL Preview** under your installed plugins and enable it (may
+   need a restart the first time a plugin is dropped in manually).
+
+A note with a fenced ` ```sfl ` block should now render as an interactive
+diagram.
 
 On desktop, each block is a **live viewer** with a **header bar** of controls —
 drag anywhere on the canvas to pan, wheel (or the `−` / `+` / `Fit` buttons) to
@@ -42,9 +81,8 @@ reflected until you reopen it.
   The preview starts collapsed.
 - **Reading mode:** the source is shown read-only.
 
-Dragging shapes on the canvas still doesn't edit anything — gesture editing
-(move/resize/text via `stickyflow/interaction`) is a later milestone, see
-[Known gaps](#known-gaps).
+Dragging shapes on the canvas still doesn't edit anything: gesture editing
+(move/resize/text via `stickyflow/interaction`) is a later milestone.
 
 > The `stickyflow/viewer` tier itself only pans on ctrl/⌘ + drag (a plain drag
 > is left for a host page to scroll); the plugin bridges plain-drag-to-pan on
@@ -54,15 +92,6 @@ Dragging shapes on the canvas still doesn't edit anything — gesture editing
 On **mobile**, and in **export / print / PDF**, it falls back to the static
 tier (`render(sfl) → svg`) — the viewer needs a live, sized DOM, and drag-pan
 would fight the note's touch-scroll on a phone.
-
-Sibling to [`packages/vscode-sfl-preview`](../vscode-sfl-preview), which does
-the equivalent job for VS Code. Unlike that package, this one depends on
-`stickyflow` as a normal bundled dependency (`file:../stickyflow.js`) rather
-than copying `dist/` in as static media — an Obsidian plugin runs directly in
-the app's own renderer process, so there's no separate webview/extension-host
-split to work around. `stickyflow/viewer` resolves through the same `file:`
-link (`tsconfig` uses `"moduleResolution": "bundler"` so `tsc` reads the
-package's `exports` map the way esbuild does).
 
 ## Build
 
@@ -74,44 +103,11 @@ cd ../obsidian-sfl && npm install && npm run build
 `npm run build` typechecks (`tsc -noEmit`) then bundles `src/main.ts` (+ the
 `stickyflow` dependency) into a single `main.js` via esbuild.
 
-**Rebuild whatever changed, in order.** Like `vscode-sfl-preview`, this
-package pulls in `stickyflow.js/dist` at bundle time, not at import time —
-`npm run build` here does *not* notice if `stickyflow.js/src` changed since
-its last build. Always `npm run build` in `stickyflow.js` first.
+**Rebuild whatever changed, in order.** This package pulls in
+`stickyflow.js/dist` at bundle time, not at import time: `npm run build`
+here does *not* notice if `stickyflow.js/src` changed since its last build.
+Always `npm run build` in `stickyflow.js` first.
 
-## Test in a real vault
-
-```bash
-mkdir -p "<vault>/.obsidian/plugins/obsidian-sfl"
-cp manifest.json main.js styles.css "<vault>/.obsidian/plugins/obsidian-sfl/"
-```
-
-Then in Obsidian: **Settings → Community plugins** → enable "SFL Preview"
-(may need a restart the first time a plugin is dropped in manually). A note
-with a fenced ` ```sfl ` block should render as an interactive diagram.
-
-Obsidian doesn't hot-reload plugins — after rebuilding, re-copy `main.js` and
-run **Developer: Reload app without saving** (Ctrl/Cmd+P) or restart.
-
-## Known gaps
-
-- **No canvas-gesture editing.** Text edits go through the Code view's textarea
-  (whole-body replace via `ctx.getSectionInfo` + `editor.replaceRange`).
-  `stickyflow/interaction` — drag-to-move/resize, double-click text edit,
-  link-reconnect, `+ Entity` / `+ Link`, delete, with the pure
-  `applyMoveChange` / `applyTextChange` / `insertEntity` patchers producing
-  surgical (not whole-body) diffs — is not wired in.
-  `vscode-sfl-preview/src/{getWebviewHtml,panel}.ts` is the reference. The
-  module-level viewer cache in `src/main.ts` (and the `saveSource` write-back)
-  is the foundation.
-- **Whole-body write-back.** A Code-view save replaces the entire fenced block
-  body in one `replaceRange`; there's no per-property patching, and the guard
-  against a concurrent external edit is a re-read immediately before the write,
-  not a version stamp.
-- **No editor↔canvas selection sync.** Clicking a shape in the Code-view
-  preview reveals its lines in the textarea (a brace-depth scan, approximate —
-  ported from `vscode-sfl-preview/src/sflOwnerBlocks.ts`), but there's no
-  reverse (cursor in the source → highlight on the canvas) and it doesn't touch
-  the note's own editor selection.
-- **Not published** to the Obsidian community plugin directory — install
-  manually as above.
+Obsidian doesn't hot-reload plugins: after rebuilding, re-copy `main.js` into
+the vault's plugin folder and run **Developer: Reload app without saving**
+(Ctrl/Cmd+P) or restart.
