@@ -145,3 +145,20 @@ Always `npm run build` in `stickyflow.js` first.
 Obsidian doesn't hot-reload plugins: after rebuilding, re-copy `main.js` into
 the vault's plugin folder and run **Developer: Reload app without saving**
 (Ctrl/Cmd+P) or restart.
+
+## 🙌 Contributing
+
+This plugin is small on purpose, which makes it a good place to start if
+you want to scratch your own itch. Two goals behind that:
+
+- 🌱 **Grow it.** Canvas-gesture editing (dragging, resizing, `+ Entity` /
+  `+ Link`), richer mobile support, whatever's missing for your workflow:
+  PRs are welcome.
+- 🛠️ **Make it yours.** Fork it and bend it toward your own notes: a custom
+  color scheme, a different default layout, a shortcut you keep reaching
+  for. It's a small enough codebase, one `src/main.ts` plus the
+  `stickyflow.js` dependency, that a focused change doesn't require
+  understanding the whole thing first.
+
+See [Build](#build) to get set up. Found a bug or have an idea? Open an
+issue, or send a PR: small and focused beats big and perfect. We will review, make comments if necessary, and merge if we are happy with the result. 🚀
