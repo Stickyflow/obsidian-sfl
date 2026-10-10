@@ -841,7 +841,7 @@ class SflBlock extends MarkdownRenderChild {
     // re-render), and the canvas keeps focus so it stays a peek, not a jump.
     const revealFromCanvas = (owner: { id: string }): void =>
       revealOwnerInTextarea(textarea, entry.draft, owner.id);
-    this.register(entry.viewer.on('entityClick', (event) => revealFromCanvas(event.owner)));
+    this.register(entry.viewer.on('canvasObjectClick', (event) => revealFromCanvas(event.owner)));
     this.register(entry.viewer.on('linkClick', (event) => revealFromCanvas(event.owner)));
 
     const errorBar = el.createDiv('sfl-code-error');
