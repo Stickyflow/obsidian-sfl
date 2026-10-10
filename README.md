@@ -4,7 +4,7 @@
 
 <div align="center">
 
-# obsidian-sfl
+# Stickyflow for Obsidian
 
 **An Obsidian community plugin for rendering diagrams in your notes.**
 
@@ -13,9 +13,9 @@
 Perfect for learning notes and visualizing concepts across all kinds of
 domains: software engineering, mathematics, gaming taxonomies, and more.
 Fenced ` ```sfl ` code blocks render as live, interactive diagrams inside
-your notes, using [`stickyflow.js`](../stickyflow.js) (SFL 1.4).
+your notes, using [`stickyflow.js`](https://github.com/Stickyflow/stickyflow.js) (SFL 1.4).
 
-## Why obsidian-sfl?
+## Why Stickyflow?
 
 A diagram usually lives outside your notes: a separate whiteboard tab, a
 pasted screenshot, an embedded image that goes stale the moment the idea
@@ -36,17 +36,27 @@ whiteboard works just as well typed directly into the note.
 
 ## Installation
 
-1. Build the plugin (see [Build](#build)) to produce `manifest.json`,
-   `main.js` and `styles.css`.
+### From Community plugins
+
+1. In Obsidian, open **Settings → Community plugins**. Turn off
+   **Restricted mode** if this is your first community plugin.
+2. Select **Browse**, search for **Stickyflow**, then **Install** and
+   **Enable**.
+
+### Manually
+
+1. Download `main.js`, `manifest.json` and `styles.css` from the
+   [latest release](https://github.com/Stickyflow/obsidian-sfl/releases/latest),
+   or build them yourself (see [Build](#build)).
 2. Copy those three files into your vault, in a folder named after the
-   plugin:
+   plugin id, `stickyflow`:
    ```bash
-   mkdir -p "<vault>/.obsidian/plugins/obsidian-sfl"
-   cp manifest.json main.js styles.css "<vault>/.obsidian/plugins/obsidian-sfl/"
+   mkdir -p "<vault>/.obsidian/plugins/stickyflow"
+   cp manifest.json main.js styles.css "<vault>/.obsidian/plugins/stickyflow/"
    ```
 3. In Obsidian, open **Settings → Community plugins**. Turn off
    **Restricted mode** if this is your first community plugin.
-4. Find **SFL Preview** under your installed plugins and enable it (may
+4. Find **Stickyflow** under your installed plugins and enable it (may
    need a restart the first time a plugin is dropped in manually).
 
 A note with a fenced ` ```sfl ` block should now render as an interactive
@@ -145,6 +155,15 @@ Always `npm run build` in `stickyflow.js` first.
 Obsidian doesn't hot-reload plugins: after rebuilding, re-copy `main.js` into
 the vault's plugin folder and run **Developer: Reload app without saving**
 (Ctrl/Cmd+P) or restart.
+
+## Releasing
+
+1. Bump `version` in `manifest.json` and `package.json`, and add the new
+   version with its `minAppVersion` to `versions.json`.
+2. Run `npm run build` and commit.
+3. Create a GitHub release whose tag equals the version exactly, with no
+   `v` prefix, and attach `main.js`, `manifest.json` and `styles.css`:
+   `gh release create 1.0.0 main.js manifest.json styles.css`.
 
 ## 🙌 Contributing
 
