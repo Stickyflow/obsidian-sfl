@@ -161,7 +161,7 @@ the vault's plugin folder and run **Developer: Reload app without saving**
 1. Bump `version` in `manifest.json` and `package.json`, and add the new
    version with its `minAppVersion` to `versions.json`.
 2. Commit, then push a tag that equals the version exactly, with no `v`
-   prefix: `git tag 0.3.0 && git push origin 0.3.0`.
+   prefix: `git tag 1.0.0 && git push origin 1.0.0`.
 3. The Release workflow builds the plugin and attaches `main.js`,
    `manifest.json` and `styles.css` to a draft release. Review it and
    publish it on GitHub.

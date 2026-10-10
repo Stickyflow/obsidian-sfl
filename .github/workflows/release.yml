@@ -1,7 +1,7 @@
 # Builds the plugin when a version tag is pushed and attaches the three files
 # Obsidian installs (main.js, manifest.json, styles.css) to a draft release.
 # The tag must equal the manifest version exactly, with no "v" prefix
-# (e.g. 0.3.0). The release stays a draft until it is published by hand.
+# (e.g. 1.0.0). The release stays a draft until it is published by hand.
 name: Release
 
 on:
