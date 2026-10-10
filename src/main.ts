@@ -463,10 +463,12 @@ function isExportContext(el: HTMLElement): boolean {
 function renderStatic(container: HTMLElement, source: string): void {
   container.addClass('sfl-preview--static');
   try {
-    // render()'s output is safe to insert via innerHTML: all user-supplied
-    // text/ids are XML-escaped and no attribute carries a user URL (see
+    // Parsed as SVG and appended as a node rather than set via innerHTML.
+    // render() XML-escapes all user-supplied text/ids anyway (see
     // stickyflow.js/README.md, "Security").
-    container.innerHTML = render(source).svg;
+    const doc = new DOMParser().parseFromString(render(source).svg, 'image/svg+xml');
+    container.empty();
+    container.appendChild(doc.documentElement);
   } catch (error) {
     container.empty();
     container.createEl('pre', { cls: 'sfl-preview-error', text: `SFL parse error: ${errorMessage(error)}` });
