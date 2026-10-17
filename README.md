@@ -181,3 +181,7 @@ you want to scratch your own itch. Two goals behind that:
 
 See [Build](#build) to get set up. Found a bug or have an idea? Open an
 issue, or send a PR: small and focused beats big and perfect. We will review, make comments if necessary, and merge if we are happy with the result. 🚀
+
+## License
+
+[Apache License 2.0](LICENSE)
