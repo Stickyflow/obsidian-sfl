@@ -404,11 +404,11 @@ function makeIconButton(
 
 interface ToolbarHandlers {
   codeShown: boolean;
-  onZoomOut(): void;
-  onZoomIn(): void;
-  onFit(): void;
-  onExpand(): void;
-  onToggleCode(): void;
+  onZoomOut: () => void;
+  onZoomIn: () => void;
+  onFit: () => void;
+  onExpand: () => void;
+  onToggleCode: () => void;
 }
 
 interface Toolbar {

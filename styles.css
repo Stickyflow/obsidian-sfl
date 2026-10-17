@@ -9,13 +9,12 @@
    </> code glyph at the block's top-right — on hover, which lands directly on
    top of our header toolbar. Our "Code" button already opens the source (with
    a live preview), so hide Obsidian's for our blocks — matching whatever
-   wrapper it uses (the button is a sibling of our rendered element). If that
-   internal class is ever renamed the rule just stops matching; the Code button
-   still works. */
-:has(> .sfl-preview) > .edit-block-button,
-.cm-embed-block:has(.sfl-preview) .edit-block-button,
-.cm-preview-code-block:has(.sfl-preview) .edit-block-button {
-  display: none !important;
+   wrapper it uses (Obsidian appends the button after our rendered element, so
+   a sibling combinator reaches it; the extra classes outrank Obsidian's own
+   rule without !important). If that internal class is ever renamed the rule
+   just stops matching; the Code button still works. */
+.markdown-source-view.mod-cm6 .cm-embed-block > .sfl-preview ~ .edit-block-button {
+  display: none;
 }
 
 .sfl-preview--static {
