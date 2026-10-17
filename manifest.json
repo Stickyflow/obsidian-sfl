@@ -5,6 +5,6 @@
   "minAppVersion": "1.4.0",
   "description": "Render SFL diagram code blocks as interactive diagrams you can pan, zoom and edit in place.",
   "author": "StickyFlow",
-  "authorUrl": "https://stickyflow.ai",
+  "authorUrl": "https://github.com/Stickyflow",
   "isDesktopOnly": false
 }
