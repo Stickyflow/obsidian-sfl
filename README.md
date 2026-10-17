@@ -41,6 +41,11 @@ whiteboard works just as well typed directly into the note.
 
 ### From Community plugins
 
+> [!NOTE]
+> Stickyflow is currently going through review for Obsidian's community
+> plugin directory. Until it's listed, install it [manually](#manually) from
+> the [latest release](https://github.com/Stickyflow/obsidian-sfl/releases/latest).
+
 1. In Obsidian, open **Settings → Community plugins**. Turn off
    **Restricted mode** if this is your first community plugin.
 2. Select **Browse**, search for **Stickyflow**, then **Install** and
@@ -143,17 +148,16 @@ Once that's wired up:
 ## Build
 
 ```bash
-cd ../stickyflow.js && npm run build   # build the core library first
-cd ../obsidian-sfl && npm install && npm run build
+npm install && npm run build
 ```
 
 `npm run build` typechecks (`tsc -noEmit`) then bundles `src/main.ts` (+ the
-`stickyflow` dependency) into a single `main.js` via esbuild.
+[`stickyflow`](https://www.npmjs.com/package/stickyflow) package from npm)
+into a single `main.js` via esbuild.
 
-**Rebuild whatever changed, in order.** This package pulls in
-`stickyflow.js/dist` at bundle time, not at import time: `npm run build`
-here does *not* notice if `stickyflow.js/src` changed since its last build.
-Always `npm run build` in `stickyflow.js` first.
+To try local changes to stickyflow.js, build it and point the dependency at
+your checkout with `npm install ../stickyflow.js`, but don't commit that:
+releases must build from the published npm package.
 
 Obsidian doesn't hot-reload plugins: after rebuilding, re-copy `main.js` into
 the vault's plugin folder and run **Developer: Reload app without saving**
