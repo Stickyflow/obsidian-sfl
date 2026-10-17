@@ -10,7 +10,7 @@
     "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production"
   },
   "dependencies": {
-    "stickyflow": "file:../stickyflow.js"
+    "stickyflow": "^0.2.0"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
