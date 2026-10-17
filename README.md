@@ -31,7 +31,7 @@ structures, gaming taxonomies: anything you'd otherwise sketch on a
 whiteboard works just as well typed directly into the note.
 
 <p align="center">
-  <img src="assets/screenshot-gaming-taxonomy.png" alt="A gaming genre taxonomy diagram, rendered live from a fenced sfl code block in an Obsidian note" width="650">
+  <img src="assets/screenshot-partitioning-sharding.png" alt="An isometric diagram of an API, a router and three shards, rendered live from a fenced sfl code block in an Obsidian note with pan, zoom, Fit, Expand and Code controls" width="650">
 </p>
 
 ## Installation
