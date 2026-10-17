@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="assets/Distel.png" alt="StickyFlow" width="900">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.png">
+    <img src="assets/banner-light.png" alt="StickyFlow: geometric leaves, circles and arcs in blue, violet, green and gold" width="900">
+  </picture>
 </p>
 
 <div align="center">
