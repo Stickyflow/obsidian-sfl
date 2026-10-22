@@ -242,6 +242,78 @@ textarea.sfl-source {
 .sfl-preview--interactive .sfl-source code {
   font-family: inherit;
   white-space: inherit;
+  /* Obsidian themes style inline `code`; keep the <pre>'s own metrics so the
+     highlight lines up with the textarea on top of it. */
+  font-size: inherit;
+  line-height: inherit;
+  padding: 0;
+  background: none;
+  color: inherit;
+}
+
+/* Editable source: a transparent-text textarea stacked on a highlighted <pre>
+   with the same font, padding and line height. */
+.sfl-preview--interactive .sfl-source-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.sfl-preview--interactive .sfl-source-wrap > .sfl-source {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+}
+
+.sfl-preview--interactive .sfl-source-highlight {
+  overflow: hidden;
+  pointer-events: none;
+  /* Room past the last line and column, so the <pre> (no scrollbars) can
+     always scroll as far as the textarea (with scrollbars) does. */
+  padding-right: calc(14px + 3em);
+  padding-bottom: calc(12px + 3em);
+}
+
+.sfl-preview--interactive .sfl-source-wrap > textarea.sfl-source {
+  color: transparent;
+  background: transparent;
+  caret-color: var(--text-normal);
+}
+
+.sfl-preview--interactive .sfl-source-wrap > textarea.sfl-source::selection {
+  color: transparent;
+  background: var(--text-selection);
+}
+
+/* Token colors, from the active theme's own code palette. */
+.sfl-preview--interactive .sfl-tok-kwc,
+.sfl-preview--interactive .sfl-tok-kw {
+  color: var(--code-keyword);
+}
+.sfl-preview--interactive .sfl-tok-sub {
+  color: var(--code-keyword);
+}
+.sfl-preview--interactive .sfl-tok-name {
+  color: var(--code-function);
+}
+.sfl-preview--interactive .sfl-tok-type {
+  color: var(--code-tag);
+}
+.sfl-preview--interactive .sfl-tok-prop {
+  color: var(--code-property);
+}
+.sfl-preview--interactive .sfl-tok-str {
+  color: var(--code-string);
+}
+.sfl-preview--interactive .sfl-tok-num,
+.sfl-preview--interactive .sfl-tok-const {
+  color: var(--code-value);
+}
+.sfl-preview--interactive .sfl-tok-comment {
+  color: var(--code-comment);
+}
+.sfl-preview--interactive .sfl-tok-punct {
+  color: var(--code-punctuation);
 }
 
 /* Parse errors while editing — wraps, scrolls if long, sits between the
