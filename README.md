@@ -88,7 +88,8 @@ edge; while you haven't panned or zoomed by hand, resizing refits the diagram
 automatically (`Fit` re-arms that).
 
 The header **Code** button flips the block between the diagram and its SFL
-source; a dot on the button marks unsaved edits parked in the Code view.
+source; a dot on the button marks unsaved edits parked in the Code view. The
+source is syntax highlighted in both modes, using your theme's code colors.
 
 The header **Expand** button opens the diagram in a near-fullscreen modal for
 a closer look: the same pan, wheel-zoom and click-to-select as the block, plus
