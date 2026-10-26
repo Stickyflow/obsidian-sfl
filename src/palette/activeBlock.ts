@@ -15,9 +15,9 @@ export interface ActiveBlock {
   /** null when edits can be applied, else why not (Reading mode, a parked
    *  draft, ...). */
   blockedReason(): string | null;
-  /** Validates and applies `next`, then selects `selectIds`. Returns an error
-   *  message, or null on success. */
-  apply(next: string, selectIds: string[]): string | null;
+  /** Validates and applies `next`, then selects `selectIds`; `flash`
+   *  highlights the change. Returns an error message, or null on success. */
+  apply(next: string, selectIds: string[], flash: boolean): string | null;
 }
 
 let active: ActiveBlock | null = null;

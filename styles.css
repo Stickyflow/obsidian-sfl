@@ -573,8 +573,10 @@ textarea.sfl-source {
   border-color: var(--interactive-accent);
 }
 
-.sfl-palette .sfl-palette-tile.is-current {
-  border-style: dashed;
+.sfl-palette .sfl-palette-tile[aria-pressed='true'] {
+  background: var(--background-secondary);
+  color: inherit;
+  border: 2px solid var(--interactive-accent);
 }
 
 .sfl-palette-thumb {

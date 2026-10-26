@@ -313,6 +313,87 @@ function linkSides(
   return { ok: true, text: insertAfter(lines, after, block), newId };
 }
 
+// --- in-place style changes ----------------------------------------------------
+// Sets (or, with value null, removes) one property in the owner's own
+// `style { }` block, creating the block when it's missing and dropping it when
+// it ends up empty. null when the owner can't be found.
+function setOwnStyle(text: string, id: string, key: string, value: string | null): string | null {
+  const lines = text.split('\n');
+  const range = ownerLineRange(lines, id);
+  const header = range && lines[range.start].match(HEADER);
+  if (!range || !header) {
+    return null;
+  }
+  const inner = `${header[1]}  `;
+  let depth = 0;
+  let styleStart = -1;
+  let styleEnd = -1;
+  for (let i = range.start; i <= range.end; i++) {
+    if (depth === 1 && styleStart < 0 && /^\s*style\s*\{\s*$/.test(lines[i])) {
+      styleStart = i;
+    }
+    for (const ch of stripStringsAndComments(lines[i])) {
+      if (ch === '{') depth++;
+      else if (ch === '}') depth--;
+    }
+    if (styleStart >= 0 && styleEnd < 0 && i > styleStart && depth === 1) {
+      styleEnd = i;
+    }
+  }
+  const property = new RegExp(`^\\s*${key}\\s*:`);
+  const line = `${inner}  ${key}: ${value}`;
+  if (styleStart >= 0 && styleEnd > styleStart) {
+    const at = lines.slice(styleStart + 1, styleEnd).findIndex((l) => property.test(l));
+    if (at >= 0 && value === null) {
+      lines.splice(styleStart + 1 + at, 1);
+      if (styleEnd - 1 === styleStart + 1) {
+        lines.splice(styleStart, 2);
+      }
+    } else if (at >= 0) {
+      lines[styleStart + 1 + at] = line;
+    } else if (value !== null) {
+      lines.splice(styleEnd, 0, line);
+    }
+  } else if (value !== null) {
+    lines.splice(range.end, 0, `${inner}style {`, line, `${inner}}`);
+  }
+  return lines.join('\n');
+}
+
+// Changes the selected shape's own shape. Prefers dropping an override when
+// its Style already gives the wanted shape, so the text stays minimal.
+export function setShape(text: string, id: string, shape: string): EditResult {
+  const cleared = setOwnStyle(text, id, 'shape', null);
+  const next = cleared !== null && shapeTypeOf(cleared, id) === shape ? cleared : setOwnStyle(text, id, 'shape', shape);
+  return next === null
+    ? { ok: false, message: "Couldn't find that shape in the source." }
+    : { ok: true, text: next, newId: bareId(id) };
+}
+
+// From the resolved link props, not the SVG: a labelled link uses a
+// stroke-dasharray of its own to leave a gap for the label.
+export function isLinkDashed(text: string, id: string): boolean {
+  const bare = bareId(id);
+  try {
+    const link = sflToCanvasState(text).links.find((l) => bareId(l.id) === bare);
+    return link?.props.strokeStyle === 'dashed';
+  } catch {
+    return false;
+  }
+}
+
+// Solid or dashed for an existing link, again preferring no override.
+export function setLinkDashed(text: string, id: string, dashed: boolean): EditResult {
+  const cleared = setOwnStyle(text, id, 'strokeStyle', null);
+  const next =
+    cleared !== null && isLinkDashed(cleared, id) === dashed
+      ? cleared
+      : setOwnStyle(text, id, 'strokeStyle', dashed ? 'dashed' : 'solid');
+  return next === null
+    ? { ok: false, message: "Couldn't find that link in the source." }
+    : { ok: true, text: next, newId: bareId(id) };
+}
+
 // --- thumbnails -------------------------------------------------------------
 // A one-shape diagram that reuses the note's own top-level Style blocks, so
 // the palette tiles look like the diagram they'd be added to.

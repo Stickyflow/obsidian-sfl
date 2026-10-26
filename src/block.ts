@@ -282,7 +282,7 @@ export class SflBlock extends MarkdownRenderChild {
       viewer: entry.viewer,
       text: () => entry.draft,
       blockedReason,
-      apply: (next, selectIds) => commit(next, selectIds, true),
+      apply: commit,
     };
     adoptActiveBlock(palette);
 

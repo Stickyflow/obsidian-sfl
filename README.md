@@ -113,12 +113,14 @@ icon) opens the **SFL palette** in the right sidebar, for growing a diagram
 without typing SFL. It follows the last block you selected something in, in a
 note open in editing mode:
 
-- **One shape selected:** pick where (left / above / below / right), the link
-  (arrow, dashed, none) and the text, then click a shape tile. The new shape
-  lands one gap away, in the selected shape's Style (only `shape:` overridden),
-  linked with the Style your other links use, and becomes the selection, so
-  repeated clicks build a chain. `Duplicate shape` copies the whole block
-  instead. The tiles are rendered from the note's own Style blocks.
+- **One shape selected:** click a shape tile to change *that* shape (only
+  `shape:` is overridden, and dropped again when its Style already has the
+  one you pick); the tiles are rendered from the note's own Style blocks.
+  Below them, `Add` (left / above / below / right) puts a linked shape of the
+  same kind one gap away, with the text and link type (arrow, dashed, none)
+  set above it, and selects it, so repeated clicks build a chain; `Copy` does
+  the same with a full copy of the shape, unlinked.
+- **One link selected:** switch it between `Solid` and `Dashed`.
 - **Two shapes selected** (Shift/Ctrl-click the second): add an arrow or a
   dashed arrow between them, on the faces that point at each other.
 

@@ -1,10 +1,10 @@
 // --- SFL palette side panel ----------------------------------------------------
-// A right-sidebar view for growing an existing diagram without typing SFL:
-// select one shape to add a connected neighbour (any shape, in the diagram's
-// own Style) or duplicate it, select two to link them. Tiles are rendered with
-// the same static `render()` the mobile fallback uses, from the note's own
-// Style blocks. Edits go through the active block's `apply` (validate, then
-// write back or update the Code view draft).
+// A right-sidebar view for changing an existing diagram without typing SFL:
+// select a shape to change its shape or add a linked neighbour or copy next
+// to it, a link to switch it solid/dashed, two shapes to link them. Tiles are
+// rendered with the same static `render()` the mobile fallback uses, from the
+// note's own Style blocks. Edits go through the active block's `apply`
+// (validate, then write back or update the Code view draft).
 import { type IconName, ItemView, Notice, setIcon, type WorkspaceLeaf } from 'obsidian';
 import { render } from 'stickyflow';
 import { makeIconButton, selectionSummary } from '../toolbar';
@@ -17,8 +17,11 @@ import {
   type Direction,
   duplicateShape,
   type EditResult,
+  isLinkDashed,
   type LinkMode,
   qualify,
+  setLinkDashed,
+  setShape,
   shapeTypeOf,
   thumbnailSource,
 } from './edits';
@@ -72,7 +75,6 @@ function thumbnailSvg(source: string): string | null {
 }
 
 export class SflPaletteView extends ItemView {
-  private direction: Direction = 'right';
   private link: LinkMode = 'arrow';
   private label = 'New step';
   private unsubscribe: (() => void) | null = null;
@@ -132,69 +134,43 @@ export class SflPaletteView extends ItemView {
     const text = block.text();
     const shapes = selection.filter((owner) => shapeTypeOf(text, owner.id) !== null);
     if (shapes.length === 1 && selection.length === 1) {
-      this.paintAddShape(el, block, text, shapes[0].id);
+      this.paintShape(el, block, text, shapes[0].id);
+    } else if (selection.length === 1 && selection[0].role === 'link') {
+      this.paintLink(el, block, text, selection[0].id);
     } else if (shapes.length === 2 && selection.length === 2) {
       this.paintConnect(el, block, text, shapes[0].id, shapes[1].id);
     } else {
       el.createDiv({
         cls: 'sfl-palette-empty',
-        text: 'Select one shape to add a connected one next to it, or Shift-click a second one to link the two.',
+        text: 'Select a shape to change it or add next to it, a link to restyle it, or Shift-click two shapes to link them.',
       });
     }
   }
 
-  private run(block: ActiveBlock, result: EditResult, selectedId: string): void {
+  // `flash` highlights what changed; skipped for in-place restyles, where the
+  // change itself is the feedback.
+  private run(block: ActiveBlock, result: EditResult, selectedId: string, flash = true): void {
     if (!result.ok) {
       new Notice(result.message);
       return;
     }
-    const error = block.apply(result.text, [qualify(selectedId, result.newId)]);
+    const error = block.apply(result.text, [qualify(selectedId, result.newId)], flash);
     if (error) {
       new Notice(error);
     }
   }
 
-  private paintAddShape(el: HTMLElement, block: ActiveBlock, text: string, id: string): void {
-    const options = el.createDiv('sfl-palette-section');
-    options.createDiv({ cls: 'sfl-palette-title', text: 'Add next to it' });
-
-    const directionRow = options.createDiv('sfl-palette-row');
-    directionRow.createSpan({ cls: 'sfl-palette-label', text: 'Place' });
-    const directions = directionRow.createDiv('sfl-palette-segment');
-    for (const [direction, icon, title] of DIRECTIONS) {
-      const button = makeIconButton(directions, icon, '', title, () => {
-        this.direction = direction;
-        this.paint();
-      });
-      button.setAttr('aria-pressed', String(this.direction === direction));
-    }
-
-    const linkRow = options.createDiv('sfl-palette-row');
-    linkRow.createSpan({ cls: 'sfl-palette-label', text: 'Link' });
-    const links = linkRow.createDiv('sfl-palette-segment');
-    for (const [mode, title] of LINK_MODES) {
-      const button = links.createEl('button', { text: title });
-      button.setAttr('aria-pressed', String(this.link === mode));
-      button.addEventListener('click', () => {
-        this.link = mode;
-        this.paint();
-      });
-    }
-
-    const labelRow = options.createDiv('sfl-palette-row');
-    labelRow.createSpan({ cls: 'sfl-palette-label', text: 'Text' });
-    const input = labelRow.createEl('input', { type: 'text', cls: 'sfl-palette-input' });
-    input.value = this.label;
-    input.addEventListener('input', () => {
-      this.label = input.value;
-    });
-
-    const grid = el.createDiv('sfl-palette-grid');
+  // One shape selected: the tiles change *its* shape; the rows below add a
+  // linked neighbour (same shape, reshape it with a tile after) or a copy.
+  private paintShape(el: HTMLElement, block: ActiveBlock, text: string, id: string): void {
+    const section = el.createDiv('sfl-palette-section');
+    section.createDiv({ cls: 'sfl-palette-title', text: 'Shape' });
+    const grid = section.createDiv('sfl-palette-grid');
     const composition = compositionOf(text, id);
     const current = shapeTypeOf(text, id);
     for (const [shape, name] of SHAPES) {
-      const tile = grid.createEl('button', { cls: 'sfl-palette-tile', attr: { title: `Add a ${name.toLowerCase()}` } });
-      tile.toggleClass('is-current', shape === current);
+      const tile = grid.createEl('button', { cls: 'sfl-palette-tile', attr: { title: `Make it a ${name.toLowerCase()}` } });
+      tile.setAttr('aria-pressed', String(shape === current));
       const preview = tile.createDiv('sfl-palette-thumb');
       const svg = thumbnailSvg(thumbnailSource(text, composition, shape)) ?? thumbnailSvg(thumbnailSource(text, null, shape));
       if (svg) {
@@ -205,23 +181,83 @@ export class SflPaletteView extends ItemView {
       }
       tile.createDiv({ cls: 'sfl-palette-name', text: name });
       tile.addEventListener('click', () => {
+        if (shape !== current) {
+          this.run(block, setShape(block.text(), id, shape), id, false);
+        }
+      });
+    }
+
+    const add = el.createDiv('sfl-palette-section');
+    add.createDiv({ cls: 'sfl-palette-title', text: 'Add next to it' });
+
+    const labelRow = add.createDiv('sfl-palette-row');
+    labelRow.createSpan({ cls: 'sfl-palette-label', text: 'Text' });
+    const input = labelRow.createEl('input', { type: 'text', cls: 'sfl-palette-input' });
+    input.value = this.label;
+    input.addEventListener('input', () => {
+      this.label = input.value;
+    });
+
+    const linkRow = add.createDiv('sfl-palette-row');
+    linkRow.createSpan({ cls: 'sfl-palette-label', text: 'Link' });
+    const links = linkRow.createDiv('sfl-palette-segment');
+    for (const [mode, title] of LINK_MODES) {
+      const button = links.createEl('button', {
+        text: title,
+        attr: { title: `Shapes added below get ${mode === 'none' ? 'no link' : `a ${title.toLowerCase()} link`}` },
+      });
+      button.setAttr('aria-pressed', String(this.link === mode));
+      button.addEventListener('click', () => {
+        this.link = mode;
+        this.paint();
+      });
+    }
+
+    const addRow = add.createDiv('sfl-palette-row');
+    addRow.createSpan({ cls: 'sfl-palette-label', text: 'Add' });
+    const addButtons = addRow.createDiv('sfl-palette-segment');
+    const copyRow = add.createDiv('sfl-palette-row');
+    copyRow.createSpan({ cls: 'sfl-palette-label', text: 'Copy' });
+    const copyButtons = copyRow.createDiv('sfl-palette-segment');
+    for (const [direction, icon, title] of DIRECTIONS) {
+      makeIconButton(addButtons, icon, '', `Add a linked shape ${title.toLowerCase()}`, () => {
         this.run(
           block,
           addConnectedShape(block.text(), id, {
-            shape,
+            shape: current ?? 'rectangle',
             label: this.label.trim(),
-            direction: this.direction,
+            direction,
             link: this.link,
           }),
           id,
         );
       });
+      makeIconButton(copyButtons, icon, '', `Copy the shape ${title.toLowerCase()}`, () => {
+        this.run(block, duplicateShape(block.text(), id, direction), id);
+      });
     }
+  }
 
-    const actions = el.createDiv('sfl-palette-section');
-    makeIconButton(actions, 'copy', 'Duplicate shape', 'Copy the selected shape next to it', () => {
-      this.run(block, duplicateShape(block.text(), id, this.direction), id);
-    });
+  // One link selected: switch it between solid and dashed.
+  private paintLink(el: HTMLElement, block: ActiveBlock, text: string, id: string): void {
+    const section = el.createDiv('sfl-palette-section');
+    section.createDiv({ cls: 'sfl-palette-title', text: 'Link' });
+    const row = section.createDiv('sfl-palette-row');
+    row.createSpan({ cls: 'sfl-palette-label', text: 'Line' });
+    const segment = row.createDiv('sfl-palette-segment');
+    const dashed = isLinkDashed(text, id);
+    for (const [wantDashed, title] of [
+      [false, 'Solid'],
+      [true, 'Dashed'],
+    ] as const) {
+      const button = segment.createEl('button', { text: title });
+      button.setAttr('aria-pressed', String(dashed === wantDashed));
+      button.addEventListener('click', () => {
+        if (dashed !== wantDashed) {
+          this.run(block, setLinkDashed(block.text(), id, wantDashed), id, false);
+        }
+      });
+    }
   }
 
   private paintConnect(el: HTMLElement, block: ActiveBlock, text: string, fromId: string, toId: string): void {
