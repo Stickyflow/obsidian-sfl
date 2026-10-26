@@ -189,17 +189,20 @@
 }
 
 /* The viewer draws editing controls (resize handles, link endpoint and segment
-   grips, quick-duplicate bubbles) around every selected owner. Outside the
-   editing split, and always in the preview modal, nothing can be changed on
-   the canvas, so keep only the selection outline. */
+   grips, quick-duplicate bubbles and the `+` path drawn after each) around
+   every selected owner. Outside the editing split, and always in the preview
+   modal, nothing can be changed on the canvas, so keep only the selection
+   outline. */
 .sfl-preview--interactive:not(.is-editing) [data-sf-resize-handle],
 .sfl-preview--interactive:not(.is-editing) [data-sf-link-endpoint],
 .sfl-preview--interactive:not(.is-editing) [data-sf-link-segment],
 .sfl-preview--interactive:not(.is-editing) [data-sf-quick-duplicate],
+.sfl-preview--interactive:not(.is-editing) [data-sf-quick-duplicate] + path,
 .sfl-preview-modal [data-sf-resize-handle],
 .sfl-preview-modal [data-sf-link-endpoint],
 .sfl-preview-modal [data-sf-link-segment],
-.sfl-preview-modal [data-sf-quick-duplicate] {
+.sfl-preview-modal [data-sf-quick-duplicate],
+.sfl-preview-modal [data-sf-quick-duplicate] + path {
   display: none;
 }
 
