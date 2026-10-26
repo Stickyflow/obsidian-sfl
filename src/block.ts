@@ -150,6 +150,9 @@ export class SflBlock extends MarkdownRenderChild {
       }
       const diagramVisible = !entry.showCode || previewOn;
       entry.rootEl.hidden = !diagramVisible;
+      // The viewer paints resize handles and quick-duplicate bubbles on every
+      // selection; they're only meaningful while editing (see styles.css).
+      container.toggleClass('is-editing', splitEditing);
       codeView.setMode(entry.showCode, splitEditing, entry.previewHidden);
       if (entry.showCode) {
         codeView.refresh();
