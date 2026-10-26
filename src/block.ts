@@ -7,6 +7,7 @@ import { createViewer, type Viewer } from 'stickyflow/viewer';
 import { type CacheEntry, cacheKey, DESTROY_GRACE_MS, destroyEntry, viewerCache } from './cache';
 import { bindCanvasNav, bindKeyboardCamera, zoomBy } from './camera';
 import { buildCodeView } from './codeView/codeView';
+import { bindGestures } from './gestures';
 import { type ActiveBlock, adoptActiveBlock, notifyActiveBlock, setActiveBlock } from './palette/activeBlock';
 import { SflPreviewModal } from './previewModal';
 import { errorMessage, isExportContext, renderError, renderStatic } from './render';
@@ -98,6 +99,8 @@ export class SflBlock extends MarkdownRenderChild {
       liveTimer: null,
       caret: null,
       refocusAfterSave: false,
+      editing: null,
+      commit: null,
     };
     entry.unbindNav = bindCanvasNav(viewer, () => {
       entry.cameraTouched = true;
@@ -153,8 +156,8 @@ export class SflBlock extends MarkdownRenderChild {
       const diagramVisible = !entry.showCode || previewOn;
       entry.rootEl.hidden = !diagramVisible;
       // The viewer paints resize handles and quick-duplicate bubbles on every
-      // selection; they're only meaningful while editing (see styles.css).
-      container.toggleClass('is-editing', splitEditing);
+      // selection; they're only meaningful where gestures edit (see styles.css).
+      container.toggleClass('is-editing', editable);
       codeView.setMode(entry.showCode, splitEditing, entry.previewHidden);
       if (entry.showCode) {
         codeView.refresh();
@@ -217,51 +220,69 @@ export class SflBlock extends MarkdownRenderChild {
     });
     header.append(toolbar.bar);
 
-    // The palette's handle on this block (see palette/activeBlock.ts). Edits
-    // land where Save would put them: straight into the note when there's no
-    // pending draft, into the Code view draft when there is one.
+    // Commits an edit from the palette or a canvas gesture. Edits land where
+    // Save would put them: straight into the note when there's no pending
+    // draft, into the Code view draft when there is one.
+    const blockedReason = (): string | null => {
+      if (!editable) {
+        return 'Open this note in editing mode to change the diagram.';
+      }
+      if (entry.draft !== entry.source && !entry.showCode) {
+        return 'This block has unsaved edits in its Code view. Save or revert them first.';
+      }
+      return null;
+    };
+    const commit = (next: string, selectIds: string[], flash: boolean): string | null => {
+      const blocked = blockedReason();
+      if (blocked) {
+        return blocked;
+      }
+      const parseError = renderError(next);
+      if (parseError) {
+        return `Couldn't apply that: ${parseError}`;
+      }
+      if (entry.draft !== entry.source) {
+        entry.draft = next;
+        entry.draftValid = true;
+      } else {
+        const result = writeBlockSource(this.app, this.ctx, container, entry.source, next);
+        if (!result.ok) {
+          return result.message;
+        }
+        entry.source = result.source;
+        entry.draft = result.source;
+        entry.draftValid = true;
+        next = result.source;
+      }
+      // Show the change right away instead of waiting for the note's
+      // re-render (which then finds the viewer already up to date).
+      if (!entry.showCode || !entry.previewHidden) {
+        entry.viewer.update({ source: next, highlightChanges: flash });
+        entry.rendered = next;
+      }
+      reconcile();
+      entry.viewer.select(selectIds);
+      return null;
+    };
+
+    // Canvas gestures: one binding per viewer, kept on the cache entry across
+    // re-renders; each mount supplies the commit they report to.
+    entry.commit = editable ? (next, selectIds) => commit(next, selectIds, false) : null;
+    if (editable && !entry.editing) {
+      entry.editing = bindGestures(entry);
+    } else if (!editable && entry.editing) {
+      entry.editing.destroy();
+      entry.editing = null;
+    }
+
+    // The palette's handle on this block (see palette/activeBlock.ts).
     const palette: ActiveBlock = {
       key,
       noteName: this.ctx.sourcePath.split('/').pop()?.replace(/\.md$/, '') ?? this.ctx.sourcePath,
       viewer: entry.viewer,
       text: () => entry.draft,
-      blockedReason: () => {
-        if (!editable) {
-          return 'Open this note in editing mode to change the diagram.';
-        }
-        if (entry.draft !== entry.source && !entry.showCode) {
-          return 'This block has unsaved edits in its Code view. Save or revert them first.';
-        }
-        return null;
-      },
-      apply: (next, selectIds) => {
-        const parseError = renderError(next);
-        if (parseError) {
-          return `Couldn't add that: ${parseError}`;
-        }
-        if (entry.draft !== entry.source) {
-          entry.draft = next;
-          entry.draftValid = true;
-        } else {
-          const result = writeBlockSource(this.app, this.ctx, container, entry.source, next);
-          if (!result.ok) {
-            return result.message;
-          }
-          entry.source = result.source;
-          entry.draft = result.source;
-          entry.draftValid = true;
-          next = result.source;
-        }
-        // Show the new owner right away, flashed, instead of waiting for the
-        // note's re-render (which then finds the viewer already up to date).
-        if (!entry.showCode || !entry.previewHidden) {
-          entry.viewer.update({ source: next, highlightChanges: true });
-          entry.rendered = next;
-        }
-        reconcile();
-        entry.viewer.select(selectIds);
-        return null;
-      },
+      blockedReason,
+      apply: (next, selectIds) => commit(next, selectIds, true),
     };
     adoptActiveBlock(palette);
 

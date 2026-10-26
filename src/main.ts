@@ -11,14 +11,16 @@
 // optional *live* render of the draft above it (nothing is written to the note
 // yet). "Save" commits the draft into the fenced block through the note's
 // editor (one step on the undo stack); "Revert" drops it. In Reading mode the
-// source is read-only. Drag-gesture editing (move/resize/text via
-// `stickyflow/interaction`) is still a later milestone — see README.
+// source is read-only. In editing mode the canvas is editable too: drag,
+// resize, relink, text, delete and nudge gestures from
+// `stickyflow/interaction` (gestures.ts), plus the SFL palette side panel.
 //
 // Layout:
 //   main.ts              plugin entry: registers the ```sfl processor
 //   block.ts             SflBlock, the per-fence render child (wires it all up)
 //   cache.ts             viewer instance cache that survives re-renders
 //   camera.ts            pan/zoom bridges and keyboard camera on the viewer
+//   gestures.ts          canvas gesture editing (move, resize, relink, ...)
 //   toolbar.ts           header buttons, hint and selection summary
 //   previewModal.ts      the "Expand" bigger-preview modal
 //   render.ts            static SVG fallback and parse-error helpers

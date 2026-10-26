@@ -128,8 +128,15 @@ goes into that draft instead, for you to Save or Revert. New shapes are placed
 next to the selected one, not around everything else, so they can overlap an
 existing shape.
 
-Dragging shapes on the canvas still doesn't edit anything: gesture editing
-(move/resize/text via `stickyflow/interaction`) is a later milestone.
+In a note open in **editing mode** the canvas itself is editable too (via
+`stickyflow/interaction`): drag a shape to move it, drag its handles to
+resize, drag a link's end or segment, double-click to edit text, `Delete` to
+remove (a shape takes its links with it), arrow keys to nudge the selection
+(Shift = 10), click a `+` bubble to add a linked neighbour of the same shape or
+drag it onto another shape to link the two. Each gesture is one undo step and
+goes where the palette's edits go (the note, or a pending Code view draft).
+Plain drag on empty canvas still pans. In Reading mode and the Expand modal the
+canvas is view-only and shows just the selection outline.
 
 > The `stickyflow/viewer` tier itself only pans on ctrl/⌘ + drag (a plain drag
 > is left for a host page to scroll); the plugin bridges plain-drag-to-pan on

@@ -8,6 +8,7 @@ import { sflToCanvasState } from 'stickyflow';
 import { ownerLineRange, stripStringsAndComments } from '../codeView/ownerLines';
 
 export type Direction = 'right' | 'below' | 'left' | 'above';
+export type Side = 'top' | 'right' | 'bottom' | 'left';
 export type LinkMode = 'arrow' | 'dashed' | 'none';
 export type EditResult = { ok: true; text: string; newId: string } | { ok: false; message: string };
 
@@ -33,6 +34,11 @@ interface OwnerBlock {
 // Viewer ids can be qualified (`model.lanes.cart`); the source names the bare id.
 export function bareId(id: string): string {
   return id.split('.').pop() ?? id;
+}
+
+// `newId` in the same qualified form as `nearId`, so it can be selected.
+export function qualify(nearId: string, newId: string): string {
+  return nearId.includes('.') ? nearId.replace(/[^.]*$/, newId) : newId;
 }
 
 function readOwner(lines: string[], id: string): OwnerBlock | null {
@@ -144,7 +150,7 @@ function round(n: number): number {
   return Math.round(n);
 }
 
-const FACES: Record<Direction, [string, string]> = {
+const FACES: Record<Direction, [Side, Side]> = {
   right: ['right', 'left'],
   below: ['bottom', 'top'],
   left: ['left', 'right'],
@@ -157,12 +163,12 @@ function linkLines(
   id: string,
   from: string,
   to: string,
-  direction: Direction,
+  [fromFace, toFace]: [Side, Side],
   dashed: boolean,
+  toFraction = 0.5,
 ): string[] {
   const inner = `${indent}  `;
   const composition = linkComposition(lines);
-  const [fromFace, toFace] = FACES[direction];
   const style: string[] = [];
   if (!composition) {
     style.push('markerEnd: arrow');
@@ -173,7 +179,7 @@ function linkLines(
   return [
     `${indent}Link ${id}${composition ? ` : ${composition}` : ''} {`,
     `${inner}from: ${from}, ${fromFace} (0.5)`,
-    `${inner}to: ${to}, ${toFace} (0.5)`,
+    `${inner}to: ${to}, ${toFace} (${toFraction})`,
     ...(style.length ? [`${inner}style {`, ...style.map((s) => `${inner}  ${s}`), `${inner}}`] : []),
     `${indent}}`,
   ];
@@ -235,7 +241,7 @@ export function addConnectedShape(
   if (options.link !== 'none') {
     block.push(
       '',
-      ...linkLines(lines, indent, nextLinkId(ids), owner.id, newId, options.direction, options.link === 'dashed'),
+      ...linkLines(lines, indent, nextLinkId(ids), owner.id, newId, FACES[options.direction], options.link === 'dashed'),
     );
   }
   return { ok: true, text: insertAfter(lines, owner.end, block), newId };
@@ -270,11 +276,40 @@ export function connectShapes(text: string, fromId: string, toId: string, dashed
   const dy = to.y + to.h / 2 - (from.y + from.h / 2);
   const direction: Direction =
     Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? 'right' : 'left') : dy >= 0 ? 'below' : 'above';
-  const ids = allIds(lines);
-  const newId = nextLinkId(ids);
+  return linkSides(lines, from, to, FACES[direction], dashed);
+}
+
+// The canvas "drag a + bubble onto a shape" gesture: a link leaving `fromId`
+// on `fromSide` and entering `toId` exactly where it was dropped.
+export function connectAt(
+  text: string,
+  fromId: string,
+  fromSide: Side,
+  toId: string,
+  toSide: Side,
+  toFraction: number,
+): EditResult {
+  const lines = text.split('\n');
+  const from = readOwner(lines, fromId);
+  const to = readOwner(lines, toId);
+  if (!from || !to) {
+    return { ok: false, message: NO_LAYOUT };
+  }
+  return linkSides(lines, from, to, [fromSide, toSide], false, toFraction);
+}
+
+function linkSides(
+  lines: string[],
+  from: OwnerBlock,
+  to: OwnerBlock,
+  faces: [Side, Side],
+  dashed: boolean,
+  toFraction = 0.5,
+): EditResult {
+  const newId = nextLinkId(allIds(lines));
   const after = Math.max(from.end, to.end);
   const holder = after === from.end ? from : to;
-  const block = ['', ...linkLines(lines, holder.indent, newId, from.id, to.id, direction, dashed)];
+  const block = ['', ...linkLines(lines, holder.indent, newId, from.id, to.id, faces, dashed, toFraction)];
   return { ok: true, text: insertAfter(lines, after, block), newId };
 }
 

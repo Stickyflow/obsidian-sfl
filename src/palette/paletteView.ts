@@ -18,6 +18,7 @@ import {
   duplicateShape,
   type EditResult,
   type LinkMode,
+  qualify,
   shapeTypeOf,
   thumbnailSource,
 } from './edits';
@@ -147,9 +148,7 @@ export class SflPaletteView extends ItemView {
       new Notice(result.message);
       return;
     }
-    // Keep the viewer's qualified id form so the new owner can be selected.
-    const qualified = selectedId.includes('.') ? selectedId.replace(/[^.]*$/, result.newId) : result.newId;
-    const error = block.apply(result.text, [qualified]);
+    const error = block.apply(result.text, [qualify(selectedId, result.newId)]);
     if (error) {
       new Notice(error);
     }

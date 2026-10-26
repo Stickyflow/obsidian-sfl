@@ -1,4 +1,5 @@
 import type { Viewer } from 'stickyflow/viewer';
+import type { Gestures } from './gestures';
 import { clearActiveBlock } from './palette/activeBlock';
 
 // --- viewer instance cache --------------------------------------------------
@@ -48,6 +49,11 @@ export interface CacheEntry {
   caret: { start: number; end: number; scrollTop: number } | null;
   /** Set on Save so the re-render it triggers puts focus back in the textarea. */
   refocusAfterSave: boolean;
+  /** Canvas gesture editing (see gestures.ts); bound only in an editable note. */
+  editing: Gestures | null;
+  /** Commits a gesture's new text through the current mount; null when the
+   *  note isn't editable. Returns an error message, or null on success. */
+  commit: ((next: string, selectIds: string[]) => string | null) | null;
 }
 
 export const viewerCache = new Map<string, CacheEntry>();
@@ -78,6 +84,7 @@ export function destroyEntry(key: string, entry: CacheEntry): void {
   entry.unbindNav();
   entry.unbindKeyboard();
   entry.unbindResize();
+  entry.editing?.destroy();
   entry.viewer.destroy();
   entry.rootEl.remove();
   viewerCache.delete(key);
