@@ -6,7 +6,7 @@
 // note's own Style blocks. Edits go through the active block's `apply`
 // (validate, then write back or update the Code view draft).
 import { type IconName, ItemView, Notice, setIcon, type WorkspaceLeaf } from 'obsidian';
-import { render } from 'stickyflow';
+import { render, SHAPE_TYPES } from 'stickyflow';
 import { makeIconButton, selectionSummary } from '../toolbar';
 import { type ActiveBlock, getActiveBlock, onActiveBlockChange } from './activeBlock';
 import {
@@ -28,22 +28,23 @@ import {
 
 export const PALETTE_VIEW_TYPE = 'sfl-palette';
 
-const SHAPES: Array<[string, string]> = [
-  ['rectangle', 'Rectangle'],
-  ['rounded_rectangle', 'Rounded'],
-  ['pill', 'Pill'],
-  ['diamond', 'Decision'],
-  ['oval', 'Oval'],
-  ['circle', 'Circle'],
-  ['parallelogram', 'Input / output'],
-  ['document', 'Document'],
-  ['cylinder', 'Database'],
-  ['hexagon', 'Hexagon'],
-  ['note', 'Note'],
-  ['cloud', 'Cloud'],
-  ['person', 'Person'],
-  ['predefined_process', 'Subroutine'],
-];
+// Every shape stickyflow can draw, in its own order. `symbol` is left out: it
+// needs a custom `points` outline to draw anything.
+const SHAPES = SHAPE_TYPES.filter((shape) => shape !== 'symbol');
+
+// Friendlier tile names for the flowchart-flavoured shapes; the rest are
+// spelled out from their SFL name.
+const SHAPE_NAMES: Partial<Record<string, string>> = {
+  rounded_rectangle: 'Rounded',
+  diamond: 'Decision',
+  parallelogram: 'Input / output',
+  cylinder: 'Database',
+  predefined_process: 'Subroutine',
+};
+
+function shapeName(shape: string): string {
+  return SHAPE_NAMES[shape] ?? shape.charAt(0).toUpperCase() + shape.slice(1).replace(/_/g, ' ');
+}
 
 const DIRECTIONS: Array<[Direction, IconName, string]> = [
   ['left', 'arrow-left', 'Left'],
@@ -168,7 +169,8 @@ export class SflPaletteView extends ItemView {
     const grid = section.createDiv('sfl-palette-grid');
     const composition = compositionOf(text, id);
     const current = shapeTypeOf(text, id);
-    for (const [shape, name] of SHAPES) {
+    for (const shape of SHAPES) {
+      const name = shapeName(shape);
       const tile = grid.createEl('button', { cls: 'sfl-palette-tile', attr: { title: `Make it a ${name.toLowerCase()}` } });
       tile.setAttr('aria-pressed', String(shape === current));
       const preview = tile.createDiv('sfl-palette-thumb');
