@@ -1,4 +1,5 @@
 import type { Viewer } from 'stickyflow/viewer';
+import { clearActiveBlock } from './palette/activeBlock';
 
 // --- viewer instance cache --------------------------------------------------
 // Obsidian re-runs a code-block processor on many events unrelated to the
@@ -80,4 +81,5 @@ export function destroyEntry(key: string, entry: CacheEntry): void {
   entry.viewer.destroy();
   entry.rootEl.remove();
   viewerCache.delete(key);
+  clearActiveBlock(key);
 }

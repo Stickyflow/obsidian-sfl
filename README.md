@@ -108,6 +108,26 @@ reflected until you reopen it.
   The preview starts collapsed.
 - **Reading mode:** the source is shown read-only.
 
+The header **palette** button (also the `Open SFL palette` command and ribbon
+icon) opens the **SFL palette** in the right sidebar, for growing a diagram
+without typing SFL. It follows the last block you selected something in, in a
+note open in editing mode:
+
+- **One shape selected:** pick where (left / above / below / right), the link
+  (arrow, dashed, none) and the text, then click a shape tile. The new shape
+  lands one gap away, in the selected shape's Style (only `shape:` overridden),
+  linked with the Style your other links use, and becomes the selection, so
+  repeated clicks build a chain. `Duplicate shape` copies the whole block
+  instead. The tiles are rendered from the note's own Style blocks.
+- **Two shapes selected** (Shift/Ctrl-click the second): add an arrow or a
+  dashed arrow between them, on the faces that point at each other.
+
+Every change is validated before it's written. With no pending draft it goes
+straight into the note (one undo step); with unsaved edits in the Code view it
+goes into that draft instead, for you to Save or Revert. New shapes are placed
+next to the selected one, not around everything else, so they can overlap an
+existing shape.
+
 Dragging shapes on the canvas still doesn't edit anything: gesture editing
 (move/resize/text via `stickyflow/interaction`) is a later milestone.
 

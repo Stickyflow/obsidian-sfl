@@ -26,15 +26,42 @@
 //   codeView/codeView.ts the Code view (read-only <pre> or editable textarea)
 //   codeView/highlight.ts SFL syntax highlighting
 //   codeView/ownerLines.ts canvas click to source-lines reveal
-import { Plugin } from 'obsidian';
+//   palette/paletteView.ts the SFL palette side panel (extend a diagram)
+//   palette/edits.ts      the palette's SFL text transforms
+//   palette/activeBlock.ts which block the palette is working on
+import { Platform, Plugin } from 'obsidian';
 import { SflBlock } from './block';
 import { destroyEntry, viewerCache } from './cache';
+import { PALETTE_VIEW_TYPE, SflPaletteView } from './palette/paletteView';
 
 export default class ObsidianSflPlugin extends Plugin {
   onload(): void {
     this.registerMarkdownCodeBlockProcessor('sfl', (source, el, ctx) => {
-      ctx.addChild(new SflBlock(el, source, ctx, this.app));
+      ctx.addChild(new SflBlock(el, source, ctx, this.app, () => this.openPalette()));
     });
+
+    // The palette only drives interactive (desktop) blocks.
+    if (Platform.isMobile) {
+      return;
+    }
+    this.registerView(PALETTE_VIEW_TYPE, (leaf) => new SflPaletteView(leaf));
+    this.addRibbonIcon('shapes', 'Open SFL palette', () => this.openPalette());
+    this.addCommand({
+      id: 'open-palette',
+      name: 'Open SFL palette',
+      callback: () => this.openPalette(),
+    });
+  }
+
+  private openPalette(): void {
+    const { workspace } = this.app;
+    const open = workspace.getLeavesOfType(PALETTE_VIEW_TYPE)[0];
+    if (open) {
+      void workspace.revealLeaf(open);
+      return;
+    }
+    const leaf = workspace.getRightLeaf(false);
+    void leaf?.setViewState({ type: PALETTE_VIEW_TYPE, active: true }).then(() => workspace.revealLeaf(leaf));
   }
 
   onunload(): void {
