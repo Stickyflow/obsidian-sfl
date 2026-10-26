@@ -108,10 +108,21 @@ reflected until you reopen it.
   The preview starts collapsed.
 - **Reading mode:** the source is shown read-only.
 
-The header **palette** button (also the `Open SFL palette` command and ribbon
-icon) opens the **SFL palette** in the right sidebar, for growing a diagram
-without typing SFL. It follows the last block you selected something in, in a
-note open in editing mode:
+### SFL palette
+
+The **SFL palette** is a side panel for changing a diagram by clicking instead
+of typing SFL. Select something in a diagram and the palette shows what you
+can do with it: turn a shape into another one, add a linked shape next to it,
+copy it, or restyle a link. Everything it does is written back into the SFL
+text of the block, so the note stays plain text you can still edit by hand.
+
+<p align="center">
+  <img src="assets/screenshot-palette.png" alt="The SFL palette in Obsidian's right sidebar: a grid of shape tiles drawn in the diagram's own purple style (rectangle, rounded, triangle, decision, hexagon, oval, circle, document, input/output, trapezoid, database, note, cloud, subroutine, pill, person) with the selected shape's tile, Note, highlighted, and below it an 'Add next to it' section with a text field, Arrow / Dashed / None link buttons and arrow buttons to add or copy the shape in each direction" width="300">
+</p>
+
+Open it with the header **palette** button, the `Open SFL palette` command or
+the ribbon icon. It opens in the right sidebar and follows the last block you
+selected something in, in a note open in editing mode:
 
 - **One shape selected:** click a shape tile to change *that* shape (only
   `shape:` is overridden, and dropped again when its Style already has the
@@ -129,6 +140,8 @@ straight into the note (one undo step); with unsaved edits in the Code view it
 goes into that draft instead, for you to Save or Revert. New shapes are placed
 next to the selected one, not around everything else, so they can overlap an
 existing shape.
+
+### Canvas editing
 
 In a note open in **editing mode** the canvas itself is editable too (via
 `stickyflow/interaction`): drag a shape to move it, drag its handles to
