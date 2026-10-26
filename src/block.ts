@@ -7,8 +7,10 @@ import { createViewer, type Viewer } from 'stickyflow/viewer';
 import { type CacheEntry, cacheKey, DESTROY_GRACE_MS, destroyEntry, viewerCache } from './cache';
 import { bindCanvasNav, bindKeyboardCamera, zoomBy } from './camera';
 import { buildCodeView } from './codeView/codeView';
+import { bindGestures } from './gestures';
+import { type ActiveBlock, adoptActiveBlock, notifyActiveBlock, setActiveBlock } from './palette/activeBlock';
 import { SflPreviewModal } from './previewModal';
-import { errorMessage, isExportContext, renderStatic } from './render';
+import { errorMessage, isExportContext, renderError, renderStatic } from './render';
 import { buildToolbar, DIAGRAM_HINT, selectionSummary } from './toolbar';
 import { editableEditorForNote, writeBlockSource } from './writeBack';
 
@@ -20,6 +22,7 @@ export class SflBlock extends MarkdownRenderChild {
     private readonly source: string,
     private readonly ctx: MarkdownPostProcessorContext,
     private readonly app: App,
+    private readonly openPalette: () => void,
   ) {
     super(containerEl);
   }
@@ -96,6 +99,8 @@ export class SflBlock extends MarkdownRenderChild {
       liveTimer: null,
       caret: null,
       refocusAfterSave: false,
+      editing: null,
+      commit: null,
     };
     entry.unbindNav = bindCanvasNav(viewer, () => {
       entry.cameraTouched = true;
@@ -151,8 +156,8 @@ export class SflBlock extends MarkdownRenderChild {
       const diagramVisible = !entry.showCode || previewOn;
       entry.rootEl.hidden = !diagramVisible;
       // The viewer paints resize handles and quick-duplicate bubbles on every
-      // selection; they're only meaningful while editing (see styles.css).
-      container.toggleClass('is-editing', splitEditing);
+      // selection; they're only meaningful where gestures edit (see styles.css).
+      container.toggleClass('is-editing', editable);
       codeView.setMode(entry.showCode, splitEditing, entry.previewHidden);
       if (entry.showCode) {
         codeView.refresh();
@@ -206,13 +211,94 @@ export class SflBlock extends MarkdownRenderChild {
         entry.showCode = !entry.showCode;
         reconcile();
       },
+      onPalette: editable
+        ? () => {
+            setActiveBlock(palette);
+            this.openPalette();
+          }
+        : null,
     });
     header.append(toolbar.bar);
+
+    // Commits an edit from the palette or a canvas gesture. Edits land where
+    // Save would put them: straight into the note when there's no pending
+    // draft, into the Code view draft when there is one.
+    const blockedReason = (): string | null => {
+      if (!editable) {
+        return 'Open this note in editing mode to change the diagram.';
+      }
+      if (entry.draft !== entry.source && !entry.showCode) {
+        return 'This block has unsaved edits in its Code view. Save or revert them first.';
+      }
+      return null;
+    };
+    const commit = (next: string, selectIds: string[], flash: boolean): string | null => {
+      const blocked = blockedReason();
+      if (blocked) {
+        return blocked;
+      }
+      const parseError = renderError(next);
+      if (parseError) {
+        return `Couldn't apply that: ${parseError}`;
+      }
+      if (entry.draft !== entry.source) {
+        entry.draft = next;
+        entry.draftValid = true;
+      } else {
+        const result = writeBlockSource(this.app, this.ctx, container, entry.source, next);
+        if (!result.ok) {
+          return result.message;
+        }
+        entry.source = result.source;
+        entry.draft = result.source;
+        entry.draftValid = true;
+        next = result.source;
+      }
+      // Show the change right away instead of waiting for the note's
+      // re-render (which then finds the viewer already up to date).
+      if (!entry.showCode || !entry.previewHidden) {
+        entry.viewer.update({ source: next, highlightChanges: flash });
+        entry.rendered = next;
+      }
+      reconcile();
+      entry.viewer.select(selectIds);
+      return null;
+    };
+
+    // Canvas gestures: one binding per viewer, kept on the cache entry across
+    // re-renders; each mount supplies the commit they report to.
+    entry.commit = editable ? (next, selectIds) => commit(next, selectIds, false) : null;
+    if (editable && !entry.editing) {
+      entry.editing = bindGestures(entry);
+    } else if (!editable && entry.editing) {
+      entry.editing.destroy();
+      entry.editing = null;
+    }
+
+    // The palette's handle on this block (see palette/activeBlock.ts).
+    const palette: ActiveBlock = {
+      key,
+      noteName: this.ctx.sourcePath.split('/').pop()?.replace(/\.md$/, '') ?? this.ctx.sourcePath,
+      viewer: entry.viewer,
+      text: () => entry.draft,
+      blockedReason,
+      apply: commit,
+    };
+    adoptActiveBlock(palette);
 
     reconcile();
     // Unsubscribe on this child's unload; a child that re-adopts a cached
     // viewer registers its own listener the same way.
     this.register(entry.viewer.on('selectionChange', paintInfo));
+    this.register(
+      entry.viewer.on('selectionChange', () => {
+        if (editable && entry.viewer.getSelection().length > 0) {
+          setActiveBlock(palette);
+        } else {
+          notifyActiveBlock(key);
+        }
+      }),
+    );
   }
 
   onunload(): void {

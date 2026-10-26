@@ -124,12 +124,22 @@ function panByPixels(viewer: Viewer, dx: number, dy: number): void {
 export interface CameraState {
   viewer: Viewer;
   cameraTouched: boolean;
+  /** Set while canvas gestures are bound (see gestures.ts): arrow keys then
+   *  nudge the selected shapes instead of panning. */
+  editing?: { nudge(dx: number, dy: number): boolean } | null;
 }
 
-// Keyboard camera control on the diagram: +/- zoom, 0 fit, arrows pan, Esc
-// clears selection. `rootEl` is made programmatically focusable (tabindex -1,
+// Keyboard camera control on the diagram: +/- zoom, 0 fit, arrows pan (or,
+// with gestures bound and something selected, nudge it), Esc clears selection. `rootEl` is made programmatically focusable (tabindex -1,
 // not a Tab stop) and takes focus on an empty-canvas click; keydowns from a
 // focused shape inside the <svg> bubble here too.
+const NUDGE: Record<string, [number, number]> = {
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+};
+
 export function bindKeyboardCamera(rootEl: HTMLElement, state: CameraState): () => void {
   rootEl.tabIndex = -1;
   const PAN_STEP = 48;
@@ -147,8 +157,17 @@ export function bindKeyboardCamera(rootEl: HTMLElement, state: CameraState): () 
     if (rootEl.offsetParent === null) {
       return; // canvas hidden (Code view) — don't drive a viewer that isn't on screen
     }
+    if (event.defaultPrevented) {
+      return; // already handled on the <svg>, e.g. arrow keys nudging a selected shape
+    }
     const target = event.target as HTMLElement | null;
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable) {
+      return;
+    }
+    const nudge = NUDGE[event.key];
+    const nudgeStep = event.shiftKey ? 10 : 1;
+    if (nudge && state.editing?.nudge(nudge[0] * nudgeStep, nudge[1] * nudgeStep)) {
+      event.preventDefault();
       return;
     }
     const step = event.shiftKey ? PAN_STEP * 2 : PAN_STEP;

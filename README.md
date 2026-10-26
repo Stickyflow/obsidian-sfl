@@ -108,8 +108,37 @@ reflected until you reopen it.
   The preview starts collapsed.
 - **Reading mode:** the source is shown read-only.
 
-Dragging shapes on the canvas still doesn't edit anything: gesture editing
-(move/resize/text via `stickyflow/interaction`) is a later milestone.
+The header **palette** button (also the `Open SFL palette` command and ribbon
+icon) opens the **SFL palette** in the right sidebar, for growing a diagram
+without typing SFL. It follows the last block you selected something in, in a
+note open in editing mode:
+
+- **One shape selected:** click a shape tile to change *that* shape (only
+  `shape:` is overridden, and dropped again when its Style already has the
+  one you pick); the tiles are rendered from the note's own Style blocks.
+  Below them, `Add` (left / above / below / right) puts a linked shape of the
+  same kind one gap away, with the text and link type (arrow, dashed, none)
+  set above it, and selects it, so repeated clicks build a chain; `Copy` does
+  the same with a full copy of the shape, unlinked.
+- **One link selected:** switch it between `Solid` and `Dashed`.
+- **Two shapes selected** (Shift/Ctrl-click the second): add an arrow or a
+  dashed arrow between them, on the faces that point at each other.
+
+Every change is validated before it's written. With no pending draft it goes
+straight into the note (one undo step); with unsaved edits in the Code view it
+goes into that draft instead, for you to Save or Revert. New shapes are placed
+next to the selected one, not around everything else, so they can overlap an
+existing shape.
+
+In a note open in **editing mode** the canvas itself is editable too (via
+`stickyflow/interaction`): drag a shape to move it, drag its handles to
+resize, drag a link's end or segment, double-click to edit text, `Delete` to
+remove (a shape takes its links with it), arrow keys to nudge the selection
+(Shift = 10), click a `+` bubble to add a linked neighbour of the same shape or
+drag it onto another shape to link the two. Each gesture is one undo step and
+goes where the palette's edits go (the note, or a pending Code view draft).
+Plain drag on empty canvas still pans. In Reading mode and the Expand modal the
+canvas is view-only and shows just the selection outline.
 
 > The `stickyflow/viewer` tier itself only pans on ctrl/⌘ + drag (a plain drag
 > is left for a host page to scroll); the plugin bridges plain-drag-to-pan on

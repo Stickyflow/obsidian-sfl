@@ -189,17 +189,20 @@
 }
 
 /* The viewer draws editing controls (resize handles, link endpoint and segment
-   grips, quick-duplicate bubbles) around every selected owner. Outside the
-   editing split, and always in the preview modal, nothing can be changed on
-   the canvas, so keep only the selection outline. */
+   grips, quick-duplicate bubbles and the `+` path drawn after each) around
+   every selected owner. They only do something where gestures edit (a note in
+   editing mode); in Reading mode and the preview modal keep only the
+   selection outline. */
 .sfl-preview--interactive:not(.is-editing) [data-sf-resize-handle],
 .sfl-preview--interactive:not(.is-editing) [data-sf-link-endpoint],
 .sfl-preview--interactive:not(.is-editing) [data-sf-link-segment],
 .sfl-preview--interactive:not(.is-editing) [data-sf-quick-duplicate],
+.sfl-preview--interactive:not(.is-editing) [data-sf-quick-duplicate] + path,
 .sfl-preview-modal [data-sf-resize-handle],
 .sfl-preview-modal [data-sf-link-endpoint],
 .sfl-preview-modal [data-sf-link-segment],
-.sfl-preview-modal [data-sf-quick-duplicate] {
+.sfl-preview-modal [data-sf-quick-duplicate],
+.sfl-preview-modal [data-sf-quick-duplicate] + path {
   display: none;
 }
 
@@ -469,4 +472,130 @@ textarea.sfl-source {
 .sfl-preview-modal [data-sf-quick-duplicate],
 .sfl-preview-modal [data-sf-quick-duplicate] + path {
   display: none;
+}
+
+/* --- SFL palette side panel ----------------------------------------------- */
+.sfl-palette {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: var(--font-ui-small);
+}
+
+.sfl-palette-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.sfl-palette-note {
+  font-weight: var(--font-semibold);
+  color: var(--text-normal);
+}
+
+.sfl-palette-selection,
+.sfl-palette-empty {
+  color: var(--text-muted);
+}
+
+.sfl-palette-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sfl-palette-title {
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.sfl-palette-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sfl-palette-label {
+  flex: 0 0 40px;
+  color: var(--text-muted);
+}
+
+.sfl-palette-segment {
+  display: flex;
+  gap: 2px;
+}
+
+.sfl-palette button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  height: 26px;
+  font-size: var(--font-ui-smaller);
+}
+
+.sfl-palette button[aria-pressed='true'] {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.sfl-palette-input {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+.sfl-palette-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 6px;
+}
+
+.sfl-palette .sfl-palette-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  height: auto;
+  padding: 6px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.sfl-palette .sfl-palette-tile:hover {
+  border-color: var(--interactive-accent);
+}
+
+.sfl-palette .sfl-palette-tile[aria-pressed='true'] {
+  background: var(--background-secondary);
+  color: inherit;
+  border: 2px solid var(--interactive-accent);
+}
+
+.sfl-palette-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 52px;
+  pointer-events: none;
+}
+
+.sfl-palette-thumb svg {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.sfl-palette-name {
+  text-align: center;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

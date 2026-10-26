@@ -37,6 +37,8 @@ interface ToolbarHandlers {
   onFit: () => void;
   onExpand: () => void;
   onToggleCode: () => void;
+  /** Opens the SFL palette on this block; null hides the button (read-only). */
+  onPalette: (() => void) | null;
 }
 
 interface Toolbar {
@@ -48,7 +50,7 @@ interface Toolbar {
   setDirty(dirty: boolean): void;
 }
 
-// Header toolbar: zoom-out  zoom-in  Fit  |  Expand  |  Code/Diagram.
+// Header toolbar: zoom-out  zoom-in  Fit  |  Expand  |  Palette  Code/Diagram.
 export function buildToolbar(handlers: ToolbarHandlers): Toolbar {
   const bar = createDiv('sfl-toolbar');
   const zoomOut = makeIconButton(bar, 'zoom-out', '', 'Zoom out', handlers.onZoomOut);
@@ -57,6 +59,9 @@ export function buildToolbar(handlers: ToolbarHandlers): Toolbar {
   bar.createSpan('sfl-sep');
   makeIconButton(bar, 'expand', 'Expand', 'Open a bigger preview', handlers.onExpand);
   bar.createSpan('sfl-sep');
+  if (handlers.onPalette) {
+    makeIconButton(bar, 'shapes', '', 'Open the SFL palette for this diagram', handlers.onPalette);
+  }
   const code = makeIconButton(bar, 'code', 'Code', 'Show the SFL source for this block', handlers.onToggleCode);
 
   return {
