@@ -17,7 +17,7 @@ const HL_PUNCT = '{}[](),;&.:';
 
 export function highlightSfl(target: HTMLElement, text: string): void {
   target.empty();
-  const out = document.createDocumentFragment();
+  const out = createFragment();
   const emit = (value: string, token: SflToken | null): void => {
     if (!value) {
       return;
