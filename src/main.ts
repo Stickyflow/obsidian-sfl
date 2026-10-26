@@ -31,7 +31,7 @@
 //   palette/paletteView.ts the SFL palette side panel (extend a diagram)
 //   palette/edits.ts      the palette's SFL text transforms
 //   palette/activeBlock.ts which block the palette is working on
-import { Platform, Plugin } from 'obsidian';
+import { Platform, Plugin, type WorkspaceLeaf } from 'obsidian';
 import { SflBlock } from './block';
 import { destroyEntry, viewerCache } from './cache';
 import { PALETTE_VIEW_TYPE, SflPaletteView } from './palette/paletteView';
@@ -55,15 +55,22 @@ export default class ObsidianSflPlugin extends Plugin {
     });
   }
 
+  // Not workspace.revealLeaf(): it's typed @since 1.7.2, newer than our
+  // minAppVersion. Expanding the right sidebar and activating the leaf does
+  // the same on every version we support.
   private openPalette(): void {
     const { workspace } = this.app;
+    const reveal = (leaf: WorkspaceLeaf): void => {
+      workspace.rightSplit.expand();
+      workspace.setActiveLeaf(leaf, { focus: true });
+    };
     const open = workspace.getLeavesOfType(PALETTE_VIEW_TYPE)[0];
     if (open) {
-      void workspace.revealLeaf(open);
+      reveal(open);
       return;
     }
     const leaf = workspace.getRightLeaf(false);
-    void leaf?.setViewState({ type: PALETTE_VIEW_TYPE, active: true }).then(() => workspace.revealLeaf(leaf));
+    void leaf?.setViewState({ type: PALETTE_VIEW_TYPE, active: true }).then(() => reveal(leaf));
   }
 
   onunload(): void {
