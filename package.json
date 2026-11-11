@@ -1,6 +1,6 @@
 {
   "name": "obsidian-sfl",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "Obsidian plugin that renders SFL diagram blocks in notes using stickyflow.js: an interactive viewer with in-place source editing on desktop, static SVG on mobile and in exports.",
   "homepage": "https://stickyflow.org/",
   "license": "Apache-2.0",
@@ -11,7 +11,7 @@
     "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production"
   },
   "dependencies": {
-    "stickyflow": "^0.5.0"
+    "stickyflow": "^0.19.0"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
