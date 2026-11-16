@@ -1,0 +1,12 @@
+# Opens a bump PR here whenever a new stickyflow version is published to npm.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: daily
+    allow:
+      - dependency-name: stickyflow
+    commit-message:
+      prefix: chore
+      include: scope
