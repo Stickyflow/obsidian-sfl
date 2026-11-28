@@ -6,10 +6,26 @@
 type SflToken = 'kw' | 'kwc' | 'sub' | 'name' | 'type' | 'prop' | 'str' | 'num' | 'const' | 'comment' | 'punct';
 
 const HL_HEADER = /^(\s*)(sfl)(\s+)(-?\d+(?:\.\d+)?)/;
+// The block kinds of SFL 1.12 (NAMED_BLOCK_KINDS in stickyflow.js,
+// sflLanguage/ast.ts, 0.23.x). Blocks that hold other blocks get the
+// container class.
 const HL_BLOCK =
-  /^(\s*)(Project|Model|Group|Container|Chart|Symbol|Shape|Entity|Link|Layout|Style|Axis|Series|Rule|Path|Net|Port|Isometric|Connection|Text|Widget|Shader|DataSource|Table)(\s+)([A-Za-z_][A-Za-z0-9_]*)/;
-const HL_CONTAINER = new Set(['Project', 'Model', 'Group', 'Container', 'Chart', 'Symbol']);
-const HL_SUBBLOCK = /^(\s*)(layout|style)(?=\s*\{)/;
+  /^(\s*)(Project|Model|Group|Entity|Container|Screen|Path|Chart|Widget|Component|Shape|Text|Image|Isometric|Mesh|Solid|Facets|Terrain|Canvas|Scene|Light|Ground|Dimension|Link|Connection|Layout|Style|Shader|Axis|Series|Rule|Net|Symbol|Port|Cut|Add|Keep|Sketch|Rect|Circle|Outline|DataSource|Repeat|Template|Use|Parameters)(\s+)([A-Za-z_][A-Za-z0-9_]*)/;
+const HL_CONTAINER = new Set([
+  'Project',
+  'Model',
+  'Group',
+  'Container',
+  'Screen',
+  'Chart',
+  'Symbol',
+  'Isometric',
+  'Canvas',
+  'Scene',
+  'Template',
+  'Repeat',
+]);
+const HL_SUBBLOCK = /^(\s*)(layout|style|fields|data)(?=\s*\{)/;
 const HL_PROPERTY = /^(\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*)(:)/;
 const HL_NUMBER = /^-?\d+(?:\.\d+)?/;
 const HL_IDENT = /^[A-Za-z_][A-Za-z0-9_]*/;
