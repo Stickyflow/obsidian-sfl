@@ -4,6 +4,7 @@
 // Code view; mobile and export contexts get the static SVG.
 import { type App, type MarkdownPostProcessorContext, MarkdownRenderChild, Platform } from 'obsidian';
 import { createViewer, type Viewer } from 'stickyflow/viewer';
+import { vaultAssetResolver } from './assets';
 import { type CacheEntry, cacheKey, DESTROY_GRACE_MS, destroyEntry, viewerCache } from './cache';
 import { bindCanvasNav, bindKeyboardCamera, zoomBy } from './camera';
 import { buildCodeView } from './codeView/codeView';
@@ -70,6 +71,7 @@ export class SflBlock extends MarkdownRenderChild {
         interactive: true,
         selectable: true,
         diagramId: key,
+        resolveAsset: vaultAssetResolver(this.app, this.ctx.sourcePath),
       });
     } catch (error) {
       rootEl.remove();
@@ -205,7 +207,7 @@ export class SflBlock extends MarkdownRenderChild {
         entry.viewer.fit();
       },
       onExpand: () => {
-        new SflPreviewModal(this.app, entry.rendered, `${key}:modal`).open();
+        new SflPreviewModal(this.app, entry.rendered, `${key}:modal`, this.ctx.sourcePath).open();
       },
       onToggleCode: () => {
         entry.showCode = !entry.showCode;

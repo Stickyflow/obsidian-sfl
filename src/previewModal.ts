@@ -1,5 +1,6 @@
 import { type App, Modal } from 'obsidian';
 import { createViewer, type Viewer } from 'stickyflow/viewer';
+import { vaultAssetResolver } from './assets';
 import { bindCanvasNav, bindKeyboardCamera, type CameraState, zoomBy } from './camera';
 import { errorMessage } from './render';
 import { DIAGRAM_HINT, makeIconButton, selectionSummary } from './toolbar';
@@ -18,6 +19,7 @@ export class SflPreviewModal extends Modal {
     app: App,
     private readonly source: string,
     private readonly diagramId: string,
+    private readonly sourcePath: string,
   ) {
     super(app);
   }
@@ -43,6 +45,7 @@ export class SflPreviewModal extends Modal {
         interactive: true,
         selectable: true,
         diagramId: this.diagramId,
+        resolveAsset: vaultAssetResolver(this.app, this.sourcePath),
       });
     } catch (error) {
       rootEl.createEl('pre', { cls: 'sfl-preview-error', text: `SFL parse error: ${errorMessage(error)}` });
