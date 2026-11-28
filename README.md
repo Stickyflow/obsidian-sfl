@@ -18,7 +18,7 @@
 Perfect for learning notes and visualizing concepts across all kinds of
 domains: software engineering, mathematics, gaming taxonomies, and more.
 Fenced ` ```sfl ` code blocks render as live, interactive diagrams inside
-your notes, using [`stickyflow.js`](https://github.com/Stickyflow/stickyflow.js) (SFL 1.11).
+your notes, using [`stickyflow.js`](https://github.com/Stickyflow/stickyflow.js) (SFL 1.12).
 
 To learn more about Stickyflow and the SFL diagram language, visit
 [stickyflow.org](https://stickyflow.org/).

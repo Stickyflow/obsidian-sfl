@@ -2,7 +2,7 @@
 // A small brace-depth scan, ported from vscode-sfl-preview/src/sflOwnerBlocks.ts.
 // Approximate on purpose — a reveal location, not a document mutation — so it
 // doesn't need the real lexer (a `{` inside a `"""` string can throw depth off).
-const OWNER_HEADER = /^\s*(Entity|Shape|Container|Group|Table|Path|Chart|Link)\s+([A-Za-z_][\w]*)\b/;
+const OWNER_HEADER = /^\s*(Entity|Shape|Container|Group|Path|Chart|Link)\s+([A-Za-z_][\w]*)\b/;
 
 export function stripStringsAndComments(line: string): string {
   return line.replace(/\/\/.*$/, '').replace(/"(?:[^"\\]|\\.)*"/g, '""');

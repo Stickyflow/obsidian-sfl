@@ -12,9 +12,12 @@ export type Side = 'top' | 'right' | 'bottom' | 'left';
 export type LinkMode = 'arrow' | 'dashed' | 'none';
 export type EditResult = { ok: true; text: string; newId: string } | { ok: false; message: string };
 
-const HEADER = /^(\s*)(Entity|Shape|Container|Group|Table|Path|Chart|Link)\s+([A-Za-z_]\w*)\s*(?::\s*([^{]*?))?\s*\{/;
-const POSITION = /^(\s*position:\s*)(-?[\d.]+)\s*,\s*(-?[\d.]+)/;
-const SIZE = /^\s*size:\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)/;
+const HEADER = /^(\s*)(Entity|Shape|Container|Group|Path|Chart|Link)\s+([A-Za-z_]\w*)\s*(?::\s*([^{]*?))?\s*\{/;
+// A place and a size sit in `layout { ... }`, one entry per line or several on
+// one line after `{` or `;`. The line's start or that mark is the prefix kept
+// when the place is rewritten.
+const POSITION = /((?:^|[{;])\s*position:\s*)(-?[\d.]+)\s*,\s*(-?[\d.]+)/;
+const SIZE = /(?:^|[{;])\s*size:\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)/;
 const GAP = { horizontal: 80, vertical: 60 };
 
 interface OwnerBlock {
